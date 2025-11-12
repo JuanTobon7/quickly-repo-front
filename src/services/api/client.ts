@@ -68,7 +68,7 @@ if (!baseURL && import.meta.env.MODE === "development") {
 }
 
 const api = axios.create({
-  baseURL: baseURL || "https://gis-powerpoint-paid-item.trycloudflare.com/api/v1/",
+  baseURL: baseURL || "https://viddefe.com/api/v1/",
   headers: {
     "Content-Type": "application/json",
   },
