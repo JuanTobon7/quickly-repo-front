@@ -65,7 +65,7 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
     roundingEnabled: false,
     cost: 0,
   });
-  const {setProduct: saveProduct} = useProducts({});
+  const {setProduct: saveProduct, createMutation, updateMutation} = useProducts({});
   const { priceScales, isLoading: loadingPriceScales, createPriceScale, globalScale, updatePriceScale } = usePriceScales();
   const { systemMetadata, isLoading: loadingSystemMetadata } = useSystemMetadata();
   const [selectedLine, setSelectedLine] = useState<string | undefined>(productReference?.productLine?.id);
@@ -340,7 +340,6 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
     };
 
     saveProduct(payload);
-    toast.success("Producto guardado correctamente");
   };
 
   // Actualizar la escala global con los niveles editados
@@ -366,6 +365,16 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
       console.error(error);
     }
   };
+
+  // Mostrar mensaje de éxito cuando se guarde el producto
+  useEffect(() => {
+    if (createMutation.isSuccess) {
+      toast.success("Producto creado correctamente");
+    }
+    if (updateMutation.isSuccess) {
+      toast.success("Producto actualizado correctamente");
+    }
+  }, [createMutation.isSuccess, updateMutation.isSuccess]);
 
   useEffect(()=>{
     if (productReference) {

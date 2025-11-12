@@ -28,37 +28,29 @@ export function useProducts(params: ProductQueryParams) {
     placeholderData: ((prev) => prev)
   })
   const products = data?.content ?? []
+  
   const create = useMutation({
-  mutationFn: (payload: ProductCreatePayload) => createProduct(payload),
-  onSuccess: (newProduct: Product) => {
-    qc.setQueryData<Pageable<Product>>(["products", params], (old) => {
-      if (!old) return old
-
-      return {
-        ...old,
-        content: [newProduct, ...old.content], // 👈 push visual inmediato
-        totalElements: old.totalElements + 1,
-      }
-    })
-  },
-})
+    mutationFn: (payload: ProductCreatePayload) => createProduct(payload),
+    onSuccess: () => {
+      // Invalidar todas las queries de productos para refrescar la lista
+      qc.invalidateQueries({ queryKey: ["products"] })
+    },
+  })
 
   const update = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: ProductUpdatePayload }) =>
       updateProduct(id, payload),
-    onSuccess: (updatedProduct: Product) => {
-      qc.setQueryData<Product[]>(["products", params], (old = []) =>
-        old.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
-      )
+    onSuccess: () => {
+      // Invalidar todas las queries de productos para refrescar la lista
+      qc.invalidateQueries({ queryKey: ["products"] })
     },
   })
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteProduct(id),
-    onSuccess: (_data, id) => {
-      qc.setQueryData<Product[]>(["products", params], (old = []) =>
-        old.filter((p) => p.id !== id)
-      )
+    onSuccess: () => {
+      // Invalidar todas las queries de productos para refrescar la lista
+      qc.invalidateQueries({ queryKey: ["products"] })
     },
   })
 
@@ -79,6 +71,9 @@ export function useProducts(params: ProductQueryParams) {
     remove,
     isLoading,
     isFetching,
+    createMutation: create,
+    updateMutation: update,
+    removeMutation: remove,
     ...queryRest,
   }
 }
