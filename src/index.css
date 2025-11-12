@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	color-scheme: light;
+	font-family: 'Inter', system-ui, sans-serif;
+	background-color: theme('colors.background');
+	color: theme('colors.secondary');
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	background-color: theme('colors.background');
+}
+
+.app-shell {
+	display: flex;
+	min-height: 100vh;
+}
+
+.surface-card {
+	background-color: theme('colors.surface');
+	border-radius: 1rem;
+	box-shadow: theme('boxShadow.soft');
+}
