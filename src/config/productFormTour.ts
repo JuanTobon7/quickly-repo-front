@@ -135,16 +135,16 @@ export const productFormTourSteps: DriveStep[] = [
     element: '.product-image-section',
     popover: {
       title: 'Imagen del Producto',
-      description: 'Carga una imagen de tu producto. Puedes hacer clic o arrastrar una imagen aquí. Las imágenes ayudan a identificar productos rápidamente.',
+      description: 'Carga una imagen de tu producto haciendo clic o arrastrándola aquí. El sistema procesará automáticamente la imagen para mejorar su calidad, eliminar fondos y optimizar el tamaño. Podrás ver una comparación antes de confirmar.',
       side: 'left',
       align: 'start'
     }
   },
   {
-    element: '.product-cost',
+    element: '.product-tax-section',
     popover: {
-      title: 'Costo del Producto',
-      description: 'Ingresa el costo de compra del producto (con IVA). Este valor se usa para calcular los precios de venta y la utilidad.',
+      title: 'Configuración de Impuestos',
+      description: 'Configura el precio base del producto y los impuestos aplicables. Puedes indicar si el precio ya incluye impuestos o no. El sistema calculará automáticamente el precio antes y después de impuestos según tu configuración.',
       side: 'left',
       align: 'start'
     }

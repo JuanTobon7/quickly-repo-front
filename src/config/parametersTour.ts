@@ -159,6 +159,15 @@ export const parametersTourSteps: DriveStep[] = [
     }
   },
   {
+    element: '.tax-section',
+    popover: {
+      title: 'Gestión de Impuestos',
+      description: 'Configura los impuestos aplicables a tus productos. Define la tasa de cada impuesto y especifica si se aplican a ventas o compras. Esto te permite calcular automáticamente los precios con impuestos incluidos.',
+      side: 'top',
+      align: 'start'
+    }
+  },
+  {
     element: '.save-button',
     popover: {
       title: '¡Guarda tus Cambios!',

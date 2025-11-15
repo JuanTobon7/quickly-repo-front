@@ -23,6 +23,10 @@ import { BarcodeScanner } from '@/components/products/BarcodeScannerInput';
 import { startProductFormTour } from '@/config/productFormTour';
 import { checkImageServiceHealth, processImage, createImagePreviewUrl, revokeImagePreviewUrl } from '@/services/api/images';
 import ImageProcessModal from '@/components/products/ImageProcessModal';
+import { ProductTaxSection, PriceTaxData } from '@/components/products/ProductTaxSection';
+import { formatCurrency, formatInputCurrency, parseCurrency } from '@/utils/currency';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { PercentageInput } from '@/components/ui/PercentageInput';
 
 type ProductEditFormProps = {
   productReference?: Product;
@@ -31,15 +35,6 @@ type ProductEditFormProps = {
   measurementUnits: Measurement[];
   brands: Brand[];
   onClose: () => void;
-};
-
-const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
 };
 
 
@@ -75,6 +70,13 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
   const [cost, setCost] = useState<number>(productReference?.cost || 0);
   const [roundingEnabled, setRoundingEnabled] = useState<boolean>(productReference?.roundingEnabled || false);
   const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [taxData, setTaxData] = useState<PriceTaxData>({
+    basePrice: 0,
+    priceIncludesTax: false,
+    selectedTaxes: [],
+    priceBeforeTaxes: 0,
+    priceAfterTaxes: 0,
+  });
   // Estado para niveles de precio editables
   type PriceLevel = {
     position: number;
@@ -265,6 +267,13 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
       setEditableLevels(updatedLevels);
     }
   }, [cost, systemMetadata, roundingEnabled]);
+
+  // Sincronizar cost con taxData.basePrice cuando el usuario edita los impuestos
+  useEffect(() => {
+    if (taxData.basePrice > 0 && taxData.basePrice !== cost) {
+      setCost(taxData.basePrice);
+    }
+  }, [taxData.basePrice]);
 
   // Actualizar un nivel específico cuando cambia el porcentaje de utilidad
   const updateLevelProfitPercentage = (position: number, profitPercentage: number) => {
@@ -561,6 +570,16 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
                   />
                 </div>
               </div>
+
+              {/* Tax Configuration Section */}
+              <div className="product-tax-section mt-4">
+                <ProductTaxSection
+                  initialBasePrice={cost}
+                  initialPriceIncludesTax={false}
+                  initialSelectedTaxes={[]}
+                  onChange={(data) => setTaxData(data)}
+                />
+              </div>
             </div>
 
             {/* Columna Derecha */}
@@ -634,35 +653,24 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
                 </div>
               </div>
 
-              {/* Precios */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="product-cost">
-                  <label className="mb-1 block text-xs font-medium text-secondary">Costo unitario (Con IVA):</label>
+              {/* Redondeo checkbox */}
+              <div className="product-rounding-checkbox">
+                <label className="mb-1 block text-xs font-medium text-secondary">Redondear precio:</label>
+                <div className="flex items-center gap-2 mt-2">
                   <input
-                    type="number"
-                    value={cost}
-                    onChange={(e) => setCost(parseFloat(e.target.value) || 0)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold text-red-600"
+                    type="checkbox"
+                    checked={roundingEnabled}
+                    onChange={(e) => setRoundingEnabled(e.target.checked)}
+                    className="h-5 w-5 rounded border-border"
+                    disabled={loadingSystemMetadata || !systemMetadata?.roundingEnabled}
                   />
-                </div>
-                <div className="product-rounding-checkbox">
-                  <label className="mb-1 block text-xs font-medium text-secondary">Redondear precio:</label>
-                  <div className="flex items-center gap-2 mt-2">
-                    <input
-                      type="checkbox"
-                      checked={roundingEnabled}
-                      onChange={(e) => setRoundingEnabled(e.target.checked)}
-                      className="h-5 w-5 rounded border-border"
-                      disabled={loadingSystemMetadata || !systemMetadata?.roundingEnabled}
-                    />
-                    {loadingSystemMetadata ? (
-                      <span className="text-xs text-muted">Cargando configuración...</span>
-                    ) : systemMetadata?.roundingEnabled && systemMetadata?.roundingValue ? (
-                      <span className="text-xs text-green-600">✓ Redondeo a ${systemMetadata.roundingValue}</span>
-                    ) : (
-                      <span className="text-xs text-amber-600">⚠ Deshabilitado en parámetros</span>
-                    )}
-                  </div>
+                  {loadingSystemMetadata ? (
+                    <span className="text-xs text-muted">Cargando configuración...</span>
+                  ) : systemMetadata?.roundingEnabled && systemMetadata?.roundingValue ? (
+                    <span className="text-xs text-green-600">✓ Redondeo a ${systemMetadata.roundingValue}</span>
+                  ) : (
+                    <span className="text-xs text-amber-600">⚠ Deshabilitado en parámetros</span>
+                  )}
                 </div>
               </div>
 
@@ -731,13 +739,13 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
                       />
                     </TableCell>
                     <TableCell className="price-profit-percentage">
-                      <input
-                        type="number"
+                      <PercentageInput
                         value={level.profitPercentage}
-                        onChange={(e) => updateLevelProfitPercentage(level.position, parseFloat(e.target.value) || 0)}
+                        onChange={(value) => updateLevelProfitPercentage(level.position, value)}
+                        placeholder="0"
                         className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
-                        step="0.01"
-                        min="0"
+                        min={0}
+                        max={1000}
                       />
                     </TableCell>
                     <TableCell className="price-sale-price">

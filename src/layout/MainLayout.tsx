@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { Menu, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Menu, ChevronsLeft, ChevronsRight, LogOut, User } from 'lucide-react';
 import { Building2, Files, PackageSearch, Settings2, UsersRound } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { getUser, logout } from '@/services/api/auth';
+import { toast } from 'sonner';
 
 type SidebarItem = {
 	label: string;
@@ -48,6 +51,14 @@ const MainLayout = ({
 }: MainLayoutProps) => {
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile drawer
+	const navigate = useNavigate();
+	const user = getUser();
+
+	const handleLogout = () => {
+		logout();
+		toast.success('Sesión cerrada correctamente');
+		navigate('/login');
+	};
 
 	return (
 		<div className="app-shell flex bg-background text-secondary h-screen">
@@ -86,10 +97,18 @@ const MainLayout = ({
 				<nav className="flex flex-1 flex-col gap-4">
 					{sidebarItems.map(({ label, icon: Icon, value }) => {
 						const isActive = value === activeSidebar;
+						const handleClick = () => {
+							if (value === 'third-parties') {
+								navigate('/third-parties');
+							} else if (value === 'inventory') {
+								navigate('/inventory');
+							}
+						};
 						return (
 							<button
 								key={value}
 								type="button"
+								onClick={handleClick}
 								className={`group flex items-center gap-3 rounded-3xl border px-2 py-3 text-sm font-semibold transition ${
 									isActive
 										? 'border-primary/60 bg-primary text-white shadow-soft'
@@ -129,20 +148,44 @@ const MainLayout = ({
 							✕
 						</button>
 					</div>
+					
+					{/* User info mobile */}
+					{user && (
+						<div className="flex items-center gap-3 rounded-lg border border-border bg-white p-3 shadow-sm">
+							<div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+								<User className="h-5 w-5 text-primary" />
+							</div>
+							<div className="flex-1">
+								<p className="text-sm font-semibold text-secondary">
+									{user.name} {user.lastname}
+								</p>
+								<p className="text-xs text-muted">{user.email}</p>
+							</div>
+						</div>
+					)}
+					
 					<nav className="flex flex-1 flex-col gap-4">
-						{sidebarItems.map(({ label, icon: Icon, value }) => {
-							const isActive = value === activeSidebar;
-							return (
-								<button
-									key={value}
-									type="button"
-									onClick={() => setSidebarOpen(false)}
-									className={`group flex items-center gap-3 rounded-3xl border px-4 py-5 text-sm font-semibold transition ${
-										isActive
-											? 'border-primary/60 bg-primary text-white shadow-soft'
-											: 'border-transparent text-secondary hover:border-primary/40 hover:bg-primary/5'
-									}`}
-								>
+					{sidebarItems.map(({ label, icon: Icon, value }) => {
+						const isActive = value === activeSidebar;
+						const handleClick = () => {
+							if (value === 'third-parties') {
+								navigate('/third-parties');
+							} else if (value === 'inventory') {
+								navigate('/inventory');
+							}
+							setSidebarOpen(false);
+						};
+						return (
+							<button
+								key={value}
+								type="button"
+								onClick={handleClick}
+								className={`group flex items-center gap-3 rounded-3xl border px-4 py-5 text-sm font-semibold transition ${
+									isActive
+										? 'border-primary/60 bg-primary text-white shadow-soft'
+										: 'border-transparent text-secondary hover:border-primary/40 hover:bg-primary/5'
+								}`}
+							>
 									<span
 										className={`flex h-10 w-10 items-center justify-center rounded-2xl ${
 											isActive ? 'bg-white/10 text-white' : 'bg-primary/12 text-primary'
@@ -155,6 +198,15 @@ const MainLayout = ({
 							);
 						})}
 					</nav>
+					
+					{/* Logout button mobile */}
+					<button
+						onClick={handleLogout}
+						className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+					>
+						<LogOut className="h-5 w-5" />
+						<span>Cerrar Sesión</span>
+					</button>
 				</div>
 				<div className="flex-1 bg-black/40" onClick={() => setSidebarOpen(false)} />
 			</div>
@@ -165,7 +217,27 @@ const MainLayout = ({
 					<div className="mx-auto flex w-full max-w-full flex-col gap-2 px-6 py-5">
 						<div className="flex items-center justify-between text-xs uppercase tracking-widest text-muted">
 							<span>{companyName}</span>
-							<div className="flex items-center gap-2">
+							<div className="flex items-center gap-3">
+								{/* User Info */}
+								{user && (
+									<div className="hidden md:flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 shadow-sm">
+										<User className="h-4 w-4 text-primary" />
+										<span className="text-xs font-medium text-secondary">
+											{user.name} {user.lastname}
+										</span>
+									</div>
+								)}
+								
+								{/* Logout Button */}
+								<button
+									onClick={handleLogout}
+									className="hidden md:flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-100"
+									title="Cerrar sesión"
+								>
+									<LogOut className="h-4 w-4" />
+									<span className="hidden lg:inline">Salir</span>
+								</button>
+								
 								{actions}
 								<button
 									className="md:hidden"

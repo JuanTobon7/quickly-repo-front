@@ -147,11 +147,13 @@ const InventoryPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
-  const handleExportPDF = async (filters: ExportFilters) => {
+  const handleExport = async (filters: ExportFilters, format: 'pdf' | 'excel') => {
     try {
       setIsExporting(true);
       setShowExportModal(false);
-      toast.loading('Generando catálogo PDF...', { id: 'pdf-export' });
+      
+      const formatLabel = format === 'pdf' ? 'PDF' : 'Excel';
+      toast.loading(`Generando catálogo ${formatLabel}...`, { id: 'export' });
       
       // Build query params
       const params = new URLSearchParams();
@@ -160,20 +162,26 @@ const InventoryPage = () => {
       if (filters.productLineId) params.append('productLineId', filters.productLineId);
       if (filters.priceLevel) params.append('priceLevel', filters.priceLevel);
       
-      // Use axios with responseType blob
-      const url = `/inventory/products/export/pdf${params.toString() ? '?' + params.toString() : ''}`;
+      // Select endpoint based on format
+      const endpoint = format === 'pdf' ? '/inventory/products/export/pdf' : '/inventory/products/export/excel';
+      const mimeType = format === 'pdf' 
+        ? 'application/pdf' 
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const extension = format === 'pdf' ? 'pdf' : 'xlsx';
+      
+      const url = `${endpoint}${params.toString() ? '?' + params.toString() : ''}`;
       const response = await api.get(url, {
         responseType: 'blob',
       });
 
-      console.log('PDF Response:', response);
+      console.log(`${formatLabel} Response:`, response);
       
       // Create blob from response
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const blob = new Blob([response.data], { type: mimeType });
       console.log('Blob size:', blob.size, 'type:', blob.type);
       
       if (blob.size === 0) {
-        throw new Error('El PDF generado está vacío');
+        throw new Error(`El archivo ${formatLabel} generado está vacío`);
       }
       
       const blobUrl = window.URL.createObjectURL(blob);
@@ -181,7 +189,7 @@ const InventoryPage = () => {
       // Create temporary link and trigger download
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `catalogo-productos-${new Date().toISOString().split('T')[0]}.pdf`;
+      link.download = `catalogo-productos-${new Date().toISOString().split('T')[0]}.${extension}`;
       document.body.appendChild(link);
       link.click();
       
@@ -191,11 +199,11 @@ const InventoryPage = () => {
         window.URL.revokeObjectURL(blobUrl);
       }, 100);
       
-      toast.dismiss('pdf-export');
-      toast.success('Catálogo exportado exitosamente');
+      toast.dismiss('export');
+      toast.success(`Catálogo ${formatLabel} exportado exitosamente`);
     } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast.dismiss('pdf-export');
+      console.error('Error exporting:', error);
+      toast.dismiss('export');
       toast.error(error instanceof Error ? error.message : 'Error al exportar el catálogo');
     } finally {
       setIsExporting(false);
@@ -499,7 +507,7 @@ const InventoryPage = () => {
       <ExportPdfModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        onExport={handleExportPDF}
+        onExport={handleExport}
         brands={brands}
         productLines={productLines}
         measurementUnits={measurementUnits}

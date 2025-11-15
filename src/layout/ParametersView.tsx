@@ -3,6 +3,7 @@ import BrandSection from '../components/parameterization/BrandSection';
 import ProductLineSection from '../components/parameterization/ProductLineSection';
 import SupplierSection from '../components/parameterization/ProviderSection';
 import MeasurementUnitSection from '../components/parameterization/MeasurementUnitSection';
+import { TaxSection } from '../components/parameterization/TaxSection';
 import { useState, useEffect } from 'react';
 import { providerType } from '@/types/providers';
 import GroupTypeSection from '@/components/parameterization/GroupTypeSection';
@@ -176,6 +177,10 @@ const ParametersView = () => {
           <div className="supplier-section"><SupplierSection /></div>
           <div className="group-type-section"><GroupTypeSection /></div>
           <div className="unit-measure-section"><MeasurementUnitSection/></div>
+        </div>
+
+        <div className="grid gap-6 grid-cols-1">
+          <div className="tax-section"><TaxSection /></div>
         </div>
 
         <div className="flex flex-col sm:flex-row justify-end gap-3 border-t border-border pt-4">
