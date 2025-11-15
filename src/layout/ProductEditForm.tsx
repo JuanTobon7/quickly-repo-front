@@ -56,6 +56,7 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
     productLine: { id: '', name: '' },
     brand: { id: '', name: '' },
     measurement: { id: '', name: '' },
+    groupTypeProduct: { id: '', name: '' },
     reference: '',
     roundingEnabled: false,
     cost: 0,
@@ -65,7 +66,7 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
   const { systemMetadata, isLoading: loadingSystemMetadata } = useSystemMetadata();
   const [selectedLine, setSelectedLine] = useState<string | undefined>(productReference?.productLine?.id);
   const [selectedBrand, setSelectedBrand] = useState<string | undefined>(productReference?.brand?.id);
-  const [selectedGroup, setSelectedGroup] = useState<string | undefined>();
+  const [selectedGroup, setSelectedGroup] = useState<string | undefined>(productReference?.groupTypeProduct?.id);
   const [selectedMeasurementUnit, setSelectedMeasurementUnit] = useState<string | undefined>(productReference?.measurement?.id);
   const [cost, setCost] = useState<number>(productReference?.cost || 0);
   const [roundingEnabled, setRoundingEnabled] = useState<boolean>(productReference?.roundingEnabled || false);

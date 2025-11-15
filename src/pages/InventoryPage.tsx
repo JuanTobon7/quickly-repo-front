@@ -29,6 +29,7 @@ import { useMeasurementUnits } from '@/hooks/inventory/useMeasurementUnits';
 import { usePriceScales } from '@/hooks/inventory/usePriceScales';
 import { useProducts } from '@/hooks/inventory/useProduct';
 import type { Product, ProductQueryParams } from '@/services/api/products';
+import { importProducts } from '@/services/api/products';
 import { PageableRequest } from '@/services/api/client';
 import FilterInput from '@/components/forms/FilterInput';
 import VoiceSearchInput from '@/components/forms/VoiceSearchInput';
@@ -36,6 +37,7 @@ import { BarcodeScanner } from '@/components/products/BarcodeScannerInput';
 import { useDebounce } from '@/hooks/useDebounce';
 import { ExportPdfModal, type ExportFilters } from '@/components/modals/ExportPdfModal';
 import api from '@/services/api/client';
+import ImportButton from '@/components/ui/ImportButton';
 type FilterForm = {
   company: string;
   costCenter: string;
@@ -428,13 +430,9 @@ const InventoryPage = () => {
           >
             <Printer className="h-4 w-4" /> Imprimir
           </button>
-          <button
-            type="button"
-            onClick={() => toast.success('Importación iniciada')}
-            className="btn-import inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-secondary transition hover:border-primary/40 hover:text-primary"
-          >
-            <ArrowDownToLine className="h-4 w-4" /> Importar
-          </button>
+          <ImportButton
+            afterLoad={importProducts}
+          />
         </div>
       </div>
 

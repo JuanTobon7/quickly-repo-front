@@ -5,6 +5,7 @@ import { Brand } from "./brands"
 import { Measurement } from "./measurementUnits"
 import { ProductLine } from "./productLines"
 import { PriceScale } from "./priceScales"
+import { GroupType } from "./groupType"
 
 export type Product = {
   id: string
@@ -14,6 +15,7 @@ export type Product = {
   description: string
   productLine: ProductLine
   brand: Brand
+  groupTypeProduct: GroupType,
   measurement: Measurement
   reference: string
   priceScale?: PriceScale
@@ -89,4 +91,15 @@ export async function deleteProduct(id: string): Promise<boolean> {
   await api.delete(`${baseUrl}/${id}`)
   toast.success("Producto eliminado correctamente")
   return true
+}
+
+export async function importProducts(file: File): Promise<void> {
+  const formData = new FormData()
+  formData.append("file", file)
+  await api.post(`${baseUrl}/import`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  })
+  toast.success("Productos importados correctamente")
 }

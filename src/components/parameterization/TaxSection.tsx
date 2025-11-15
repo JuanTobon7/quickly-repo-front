@@ -150,8 +150,8 @@ function TaxForm({ initial, onCancel, onSubmit }: TaxFormProps) {
       toast.error('El nombre es requerido');
       return;
     }
-    if (rate <= 0) {
-      toast.error('La tasa debe ser mayor a 0');
+    if (rate < 0) {
+      toast.error('La tasa debe ser positiva');
       return;
     }
 

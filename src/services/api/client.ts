@@ -68,27 +68,11 @@ if (!baseURL && import.meta.env.MODE === "development") {
 }
 
 const api = axios.create({
-  baseURL,
+  baseURL: baseURL,
   headers: {
     "Content-Type": "application/json",
   },
 });
-
-// ---------------------------------------------------------
-// Interceptor para agregar token de autenticación
-// ---------------------------------------------------------
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
 // ---------------------------------------------------------
 // Interceptores globales
@@ -121,8 +105,7 @@ api.interceptors.response.use(
       }
     }
 
-    // Si no es ApiResponse (ej: login que devuelve { token, type, employee })
-    // decodificar igual por seguridad y devolver tal cual
+    // Si no es ApiResponse, decodificar igual por seguridad
     const decoded = decodeHtmlEntities(response.data);
     return decoded;
   },
@@ -130,30 +113,6 @@ api.interceptors.response.use(
     // Errores del servidor o red
     if (error.response) {
       const { data, status } = error.response;
-      
-      // Handle 401 - Unauthorized (token expired or invalid)
-      if (status === 401) {
-        // Clear auth data
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('auth_user');
-        
-        // Only show toast and redirect if not already on login page
-        if (!window.location.pathname.includes('/login')) {
-          toast.error('Sesión expirada. Por favor, inicie sesión nuevamente.');
-          window.location.href = '/login';
-        }
-        
-        // Return early to avoid showing another toast
-        return Promise.reject({
-          success: false,
-          status,
-          message: decodeHtmlEntities(data?.message || "No autorizado"),
-          errorCode: data?.errorCode || "UNAUTHORIZED",
-          meta: decodeHtmlEntities(data?.meta),
-          timestamp: data?.timestamp || new Date().toISOString(),
-        } as ApiError);
-      }
-      
       const apiError: ApiError = {
         success: false,
         status,
@@ -162,9 +121,7 @@ api.interceptors.response.use(
         meta: decodeHtmlEntities(data?.meta),
         timestamp: data?.timestamp || new Date().toISOString(),
       };
-      
       toast.error(apiError.message);
-      
       return Promise.reject(apiError);
     }
 
