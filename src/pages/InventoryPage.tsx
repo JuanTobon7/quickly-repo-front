@@ -26,7 +26,6 @@ import { useProductLines } from '@/hooks/inventory/useProductLines';
 import { useGroupTypes } from '@/hooks/inventory/useGroupType';
 import { useBrands } from '@/hooks/inventory/useBrands';
 import { useMeasurementUnits } from '@/hooks/inventory/useMeasurementUnits';
-import { usePriceScales } from '@/hooks/inventory/usePriceScales';
 import { useProducts } from '@/hooks/inventory/useProduct';
 import type { Product, ProductQueryParams } from '@/services/api/products';
 import { importProducts } from '@/services/api/products';
@@ -136,15 +135,18 @@ const InventoryPage = () => {
   const {groupTypes} = useGroupTypes();
   const { brands } = useBrands();
   const { measurementUnits } = useMeasurementUnits();
-  const { priceScales } = usePriceScales();
   const { products, isLoading, totalPages } = useProducts(params);
 
-  // Extraer todos los niveles de precio de todas las escalas
+  // Extraer todos los niveles de precio únicos de los productos
   const priceLevels = useMemo(() => {
-    return priceScales.flatMap(scale => 
-      scale.levels.map(level => ({ name: level.name }))
-    );
-  }, [priceScales]);
+    const uniqueLevels = new Set<string>();
+    products.forEach(product => {
+      product.priceLevels?.forEach(level => {
+        uniqueLevels.add(level.name);
+      });
+    });
+    return Array.from(uniqueLevels).map(name => ({ name }));
+  }, [products]);
 
   const [isExporting, setIsExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);

@@ -68,7 +68,7 @@ if (!baseURL && import.meta.env.MODE === "development") {
 }
 
 const api = axios.create({
-  baseURL: baseURL,
+  baseURL: baseURL || "https://viddefe.com/api/v1",
   headers: {
     "Content-Type": "application/json",
   },

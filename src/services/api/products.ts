@@ -4,8 +4,14 @@ import api, { Pageable, PageableRequest } from "./client"
 import { Brand } from "./brands"
 import { Measurement } from "./measurementUnits"
 import { ProductLine } from "./productLines"
-import { PriceScale } from "./priceScales"
 import { GroupType } from "./groupType"
+
+export type PriceLevel = {
+  id?: string
+  position: number
+  name: string
+  profitPercentage: number
+}
 
 export type Product = {
   id: string
@@ -18,7 +24,7 @@ export type Product = {
   groupTypeProduct: GroupType,
   measurement: Measurement
   reference: string
-  priceScale?: PriceScale
+  priceLevels: PriceLevel[]
   roundingEnabled: boolean
   cost: number
 }
@@ -30,8 +36,9 @@ export type ProductCreatePayload = {
   productLineId: string
   brandId: string
   measurementId: string
+  groupId: string
   reference: string
-  priceScaleId?: string
+  priceLevels: Omit<PriceLevel, 'id'>[]
   roundingEnabled: boolean
   cost: number
 }

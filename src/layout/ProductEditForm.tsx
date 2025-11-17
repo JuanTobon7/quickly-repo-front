@@ -16,8 +16,6 @@ import { ProductLine } from '@/services/api/productLines';
 import { GenericDropdown } from '@/components/ui/DropDown';
 import { Brand } from '@/services/api/brands';
 import { Measurement } from '@/services/api/measurementUnits';
-import { usePriceScales } from '@/hooks/inventory/usePriceScales';
-import { PriceScale } from '@/services/api/priceScales';
 import { useSystemMetadata } from '@/hooks/inventory/useSystemMetadata';
 import { BarcodeScanner } from '@/components/products/BarcodeScannerInput';
 import { startProductFormTour } from '@/config/productFormTour';
@@ -58,11 +56,11 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
     measurement: { id: '', name: '' },
     groupTypeProduct: { id: '', name: '' },
     reference: '',
+    priceLevels: [],
     roundingEnabled: false,
     cost: 0,
   });
   const {setProduct: saveProduct, createMutation, updateMutation} = useProducts({});
-  const { priceScales, isLoading: loadingPriceScales, createPriceScale, globalScale, updatePriceScale } = usePriceScales();
   const { systemMetadata, isLoading: loadingSystemMetadata } = useSystemMetadata();
   const [selectedLine, setSelectedLine] = useState<string | undefined>(productReference?.productLine?.id);
   const [selectedBrand, setSelectedBrand] = useState<string | undefined>(productReference?.brand?.id);
@@ -306,32 +304,13 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
     setEditableLevels(updatedLevels);
   };
 
-  // Cargar la escala global automáticamente al montar el componente
-  useEffect(() => {
-    if (globalScale && editableLevels.length === 0) {
-      const loadedLevels = globalScale.levels
-        .sort((a, b) => a.position - b.position)
-        .map(level => {
-          const salePrice = calculateSalePrice(cost, level.profitPercentage);
-          return {
-            position: level.position,
-            name: level.name,
-            profitPercentage: level.profitPercentage,
-            salePrice,
-          };
-        });
-      setEditableLevels(loadedLevels);
-      toast.success(`Escala global cargada: ${globalScale.name}`);
-    }
-  }, [globalScale, cost]);
-
   const handleSave = () => {
     console.log('Guardando producto:', product);
 
     if (!product) return;
 
-    if (!selectedLine || !selectedBrand || !selectedMeasurementUnit) {
-      toast.error("Debe seleccionar línea, marca y unidad de medida");
+    if (!selectedLine || !selectedBrand || !selectedMeasurementUnit || !selectedGroup) {
+      toast.error("Debe seleccionar línea, marca, unidad de medida y grupo");
       return;
     }
 
@@ -344,36 +323,17 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
       reference: product.reference,
       description: product.description,
       measurementId: selectedMeasurementUnit,
-      priceScaleId: globalScale?.id, // Usar siempre la escala global
+      groupId: selectedGroup,
+      priceLevels: editableLevels.map(level => ({
+        position: level.position,
+        name: level.name,
+        profitPercentage: level.profitPercentage,
+      })),
       roundingEnabled: roundingEnabled,
       cost: cost,
     };
 
     saveProduct(payload);
-  };
-
-  // Actualizar la escala global con los niveles editados
-  const handleSavePriceScale = async () => {
-    if (!globalScale) {
-      toast.error('No se pudo cargar la escala global');
-      return;
-    }
-
-    try {
-      await updatePriceScale(globalScale.id, {
-        name: globalScale.name, // Mantener el nombre existente
-        active: true,
-        levels: editableLevels.map(level => ({
-          position: level.position,
-          name: level.name,
-          profitPercentage: level.profitPercentage,
-        })),
-      });
-      toast.success('Escala de precio actualizada correctamente');
-    } catch (error) {
-      toast.error('Error al actualizar la escala de precio');
-      console.error(error);
-    }
   };
 
   // Mostrar mensaje de éxito cuando se guarde el producto
@@ -392,12 +352,13 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
       setSelectedLine(productReference.productLine?.id);
       setSelectedBrand(productReference.brand?.id);
       setSelectedMeasurementUnit(productReference.measurement?.id);
+      setSelectedGroup(productReference.groupTypeProduct?.id);
       setCost(productReference.cost || 0);
       setRoundingEnabled(productReference.roundingEnabled || false);
       
       // Cargar niveles de precio si existen
-      if (productReference.priceScale?.levels) {
-        const loadedLevels = productReference.priceScale.levels
+      if (productReference.priceLevels && productReference.priceLevels.length > 0) {
+        const loadedLevels = productReference.priceLevels
           .sort((a, b) => a.position - b.position)
           .map(level => {
             const salePrice = calculateSalePrice(productReference.cost || 0, level.profitPercentage);
@@ -688,14 +649,8 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
         {/* Tabla de Escalas de Precio */}
         <div className="price-scale-table mt-6">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-secondary">Escala de Precio Global</h3>
+            <h3 className="text-sm font-semibold text-secondary">Niveles de Precio del Producto</h3>
             <div className="flex gap-2">
-              <button 
-                onClick={handleSavePriceScale}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
-              >
-                Guardar Escala
-              </button>
               <button 
                 onClick={() => {
                   setEditableLevels(prevLevels => 
