@@ -168,6 +168,15 @@ export const parametersTourSteps: DriveStep[] = [
     }
   },
   {
+    element: '.price-scale-section',
+    popover: {
+      title: 'Nombres de Niveles de Precio',
+      description: 'Personaliza los nombres de tus niveles de precio (escalas). Por ejemplo: "Mayorista", "Minorista", "Distribuidor", "Cliente VIP", etc. Estos nombres aparecerán en el formulario de productos cuando configures los diferentes precios de venta.',
+      side: 'top',
+      align: 'start'
+    }
+  },
+  {
     element: '.save-button',
     popover: {
       title: '¡Guarda tus Cambios!',

@@ -4,6 +4,7 @@ import api, { Pageable, PageableRequest } from "./client"
 import { Brand } from "./brands"
 import { Measurement } from "./measurementUnits"
 import { ProductLine } from "./productLines"
+import { Tax } from "./taxes"
 import { GroupType } from "./groupType"
 
 export type PriceLevel = {
@@ -11,6 +12,7 @@ export type PriceLevel = {
   position: number
   name: string
   profitPercentage: number
+  priceScaleNameId?: string
 }
 
 export type Product = {
@@ -27,6 +29,9 @@ export type Product = {
   priceLevels: PriceLevel[]
   roundingEnabled: boolean
   cost: number
+  priceBeforeTaxes?: number
+  priceAfterTaxes?: number
+  taxes?: Tax
 }
 
 export type ProductCreatePayload = {
@@ -38,9 +43,15 @@ export type ProductCreatePayload = {
   measurementId: string
   groupId: string
   reference: string
-  priceLevels: Omit<PriceLevel, 'id'>[]
+  priceLevels: {
+    priceScaleNameId: string
+    profitPercentage: number
+  }[]
   roundingEnabled: boolean
   cost: number
+  priceBeforeTaxes?: number
+  priceAfterTaxes?: number
+  taxId: string
 }
 export type ProductUpdatePayload = ProductCreatePayload
 export type ProductQueryParams = { 
@@ -51,11 +62,25 @@ export type ProductQueryParams = {
   name?: string,
   barCode?: string,
   reference?: string,
-  code?: string
+  code?: string,
+  keyWord?: string 
 }
+
+export type ProductSummary = {
+  id?: string,
+  code: string
+  reference: string
+  name: string
+  quantity: number
+  cost: number
+  priceSale: number
+}
+
 const baseUrl = "/inventory/products"
 
-export async function getAllProducts(params: ProductQueryParams = {}): Promise<Pageable<Product>> {
+export async function getAllProducts(
+  params: ProductQueryParams = {}
+): Promise<Pageable<ProductSummary>> {
   const { brandId, productLineId, measurementId, pageableRequest, barCode, reference, code, name } = params
 
   const query = new URLSearchParams()
@@ -64,14 +89,30 @@ export async function getAllProducts(params: ProductQueryParams = {}): Promise<P
   if (brandId) query.append("brandId", brandId)
   if (productLineId) query.append("productLineId", productLineId)
   if (measurementId) query.append("measurementId", measurementId)
-  if(barCode) query.append("barCode", barCode)
-  if(reference) query.append("reference", reference)
-  if(code) query.append("code", code)
-  if(name) query.append("name", name)
+  if (barCode) query.append("barCode", barCode)
+  if (reference) query.append("reference", reference)
+  if (code) query.append("code", code)
+  if (name) query.append("name", name)
 
-  const { data } = await api.get<Pageable<Product>>(`${baseUrl}?${query.toString()}`)
+  const { data } = await api.get<Pageable<ProductSummary>>(
+    `${baseUrl}?${query.toString()}`
+  )
+
   return data
 }
+ export async function getProductsByKeyWord(
+  keyWord: string,  pageableRequest: PageableRequest
+ ): Promise<Pageable<ProductSummary>> {
+  const query = new URLSearchParams();
+  query.append("size", pageableRequest.size.toString())
+  query.append("page", pageableRequest.page.toString())
+  if(keyWord) query.append("keyWord", keyWord)
+  const { data } = await api.get<Pageable<ProductSummary>>(
+    `${baseUrl}?${query.toString()}`
+  )
+
+  return data
+ }
 
 // ✅ Obtener un producto por id
 export async function getProductById(id: string): Promise<Product> {

@@ -83,17 +83,24 @@ export async function processImage(
   }
 
   try {
+    
     const response = await api.post(`${baseUrl}/process`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Axios detectará automáticamente que es FormData y configurará:
+      // Content-Type: multipart/form-data; boundary=----WebKitFormBoundary...
       responseType: "blob",
       timeout: 60000, // 60 seconds timeout for image processing
     });
-
+    
     // Response should be a Blob with image/webp content-type
     return response.data;
   } catch (error: any) {
+    console.error('❌ Error procesando imagen:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      headers: error.response?.headers,
+      message: error.message
+    });
+    
     if (error.response?.status === 400) {
       throw new Error("Parámetros inválidos o archivo no válido");
     } else if (error.response?.status === 503) {

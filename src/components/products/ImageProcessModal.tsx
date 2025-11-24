@@ -79,7 +79,7 @@ export default function ImageProcessModal({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-primary">
-                Imagen Procesada ✨
+                Imagen Procesada
               </h3>
               <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
                 {processedSize}

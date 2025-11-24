@@ -21,7 +21,7 @@ export default function ProviderSection() {
     {
       header: "Acciones",
       cell: (ctx: any) => (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             type="button"
             onClick={(e) => {
@@ -29,7 +29,7 @@ export default function ProviderSection() {
               setEditing(ctx.row.original);
               setCreating(false);
             }}
-            className="rounded-md border border-border px-2 py-1 text-sm"
+            className="rounded-md border border-border px-2 py-1 text-xs sm:text-sm"
           >
             Editar
           </button>
@@ -39,7 +39,7 @@ export default function ProviderSection() {
               e.stopPropagation();
               if (confirm("¿Eliminar proveedor?")) remove.mutate(ctx.row.original.id);
             }}
-            className="rounded-md border border-border px-2 py-1 text-sm text-danger"
+            className="rounded-md border border-border px-2 py-1 text-xs sm:text-sm text-danger"
           >
             Eliminar
           </button>
@@ -49,44 +49,47 @@ export default function ProviderSection() {
   ];
 
   return (
-    <section className="space-y-4 rounded-md border overflow-hidden border-border/60 bg-white p-4">
-      {/* Header */}
+    <section className="space-y-4 rounded-md border border-border/60 bg-white p-4 overflow-hidden">
+
+      {/* HEADER — RESPONSIVE */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4">
+
+        <div className="flex flex-col  gap-1 sm:gap-4">
           <h3 className="text-lg font-semibold">Proveedores</h3>
-          <p className="text-sm text-muted max-w-full sm:max-w-md">
+          <p className="text-sm text-muted max-w-full sm:max-w-sm">
             Registra proveedores y su contacto (opcional).
           </p>
         </div>
-        <div className="flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              setCreating(true);
-              setEditing(null);
-            }}
-            title="Nuevo Proveedor"
-            aria-label="Nuevo Proveedor"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setCreating(true);
+            setEditing(null);
+          }}
+          title="Nuevo Proveedor"
+          aria-label="Nuevo Proveedor"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition hover:bg-primary/90"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* TABLE WRAPPER — SCROLL RESPONSIVE */}
+      <div className="overflow-x-auto rounded-md border border-border/40">
+        <div className="min-w-[500px]">
+          <DataTable
+            columns={columns}
+            pageCount={providers.length}
+            pageFun={() => {}}
+            data={providers}
+            isLoading={isLoading}
+            emptyState="No hay proveedores"
+          />
         </div>
       </div>
 
-      {/* DataTable con scroll horizontal en móviles */}
-      <div className="overflow-hidden">
-        <DataTable
-          columns={columns}
-          pageCount={providers.length}
-          pageFun={() => {}}
-          data={providers}
-          isLoading={isLoading}
-          emptyState="No hay proveedores"
-        />
-      </div>
-
-      {/* Modales de Crear / Editar */}
+      {/* FORMULARIOS */}
       {creating && (
         <ProviderForm
           title="Crear Proveedor"

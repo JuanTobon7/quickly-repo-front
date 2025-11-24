@@ -26,6 +26,7 @@ export function useEmployeeCostCenters(employeeId: string | null) {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["employee-cost-centers", employeeId] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
       toast.success(data.message || "Empleado asignado correctamente");
     },
     onError: (error: any) => {
@@ -44,6 +45,7 @@ export function useEmployeeCostCenters(employeeId: string | null) {
       removeEmployeeFromCostCenter(employeeId!, costCenterId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employee-cost-centers", employeeId] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
       toast.success("Asignación eliminada correctamente");
     },
     onError: (error: any) => {

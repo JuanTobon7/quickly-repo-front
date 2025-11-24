@@ -134,8 +134,8 @@ export const productFormTourSteps: DriveStep[] = [
   {
     element: '.product-image-section',
     popover: {
-      title: 'Imagen del Producto',
-      description: 'Carga una imagen de tu producto haciendo clic o arrastrándola aquí. El sistema procesará automáticamente la imagen para mejorar su calidad, eliminar fondos y optimizar el tamaño. Podrás ver una comparación antes de confirmar.',
+      title: 'Imágenes del Producto',
+      description: 'Carga múltiples imágenes de tu producto. Puedes seleccionar varias a la vez, procesarlas automáticamente para eliminar fondos y mejorar la calidad. Usa los controles de navegación para ver todas las imágenes y establece cuál será la principal. Las imágenes se guardarán cuando guardes el producto.',
       side: 'left',
       align: 'start'
     }

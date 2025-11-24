@@ -68,15 +68,38 @@ if (!baseURL && import.meta.env.MODE === "development") {
 }
 
 const api = axios.create({
-  baseURL: baseURL || "https://viddefe.com/api/v1",
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL: baseURL,
+  // NO configurar Content-Type por defecto - axios lo detectará automáticamente
+  // (application/json para objetos, multipart/form-data para FormData, etc.)
 });
 
 // ---------------------------------------------------------
 // Interceptores globales
 // ---------------------------------------------------------
+
+// Interceptor de request para añadir el token de autenticación
+api.interceptors.request.use(
+  (config) => {
+    // Obtener token del localStorage
+    const token = localStorage.getItem('auth_token');
+    
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // Si no es FormData y no tiene Content-Type, usar application/json
+    if (!(config.data instanceof FormData) && !config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 api.interceptors.response.use(
   (response) => {
     // Si es una respuesta de tipo blob (archivo binario), devolverla tal cual
@@ -86,8 +109,8 @@ api.interceptors.response.use(
 
     const res = response.data as ApiResponse<any>;
 
-    // Si cumple estructura de ApiResponse
-    if (res && typeof res.success === "boolean") {
+    // Si cumple estructura de ApiResponse (backend con wrapper estándar)
+    if (res && typeof res.success === "boolean" && res.hasOwnProperty('data')) {
       // 🔧 decodificar cualquier campo escapado (seguridad OWASP)
       res.data = decodeHtmlEntities(res.data);
       res.message = decodeHtmlEntities(res.message);
@@ -97,7 +120,8 @@ api.interceptors.response.use(
         if (res.message && !["OK", "Created", "No Content"].includes(res.message)) {
           toast.success(res.message);
         }
-        return res;
+        // Devolver la data envuelta en el objeto response para que axios la acceda con response.data
+        return { ...response, data: res.data };
       } else {
         // Error controlado por el backend
         toast.error(res.message || "Error en la operación");
@@ -105,14 +129,58 @@ api.interceptors.response.use(
       }
     }
 
-    // Si no es ApiResponse, decodificar igual por seguridad
-    const decoded = decodeHtmlEntities(response.data);
-    return decoded;
+    // Si NO es ApiResponse (respuesta directa como array o objeto plano), decodificar y devolver
+    response.data = decodeHtmlEntities(response.data);
+    return response;
   },
   (error) => {
     // Errores del servidor o red
     if (error.response) {
       const { data, status } = error.response;
+      
+      // Manejo especial para 401 (No autorizado)
+      if (status === 401) {
+        const url = error.config?.url || '';
+        // Solo considerar "opcional" el endpoint de procesamiento de imágenes
+        // Los endpoints de productos/imágenes SÍ requieren autenticación
+        const isOptionalImageEndpoint = url.includes('/images/process') || url.includes('/images/health');
+        
+        console.error('🚫 Error 401:', { url, isOptional: isOptionalImageEndpoint });
+        
+        // Si es el servicio de procesamiento de imágenes (opcional), no redirigir
+        if (isOptionalImageEndpoint) {
+          console.warn('Image processing service not available or not authenticated');
+          toast.warning('Servicio de procesamiento de imágenes no disponible');
+          return Promise.reject({
+            success: false,
+            status: 401,
+            message: 'Servicio de procesamiento no disponible',
+            errorCode: 'IMAGE_PROCESSING_UNAVAILABLE',
+            timestamp: new Date().toISOString(),
+          } as ApiError);
+        }
+        
+        // Para otros endpoints (incluyendo upload de productos), limpiar sesión y redirigir
+        console.error('🔐 Sesión expirada - redirigiendo a login');
+        toast.error('Sesión expirada. Redirigiendo al login...');
+        localStorage.clear();
+        
+        // Evitar redirección infinita si ya estamos en login
+        if (!window.location.pathname.includes('/login')) {
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1000); // Dar tiempo para que se vea el toast
+        }
+        
+        return Promise.reject({
+          success: false,
+          status: 401,
+          message: 'No autorizado',
+          errorCode: 'UNAUTHORIZED',
+          timestamp: new Date().toISOString(),
+        } as ApiError);
+      }
+
       const apiError: ApiError = {
         success: false,
         status,
@@ -121,6 +189,18 @@ api.interceptors.response.use(
         meta: decodeHtmlEntities(data?.meta),
         timestamp: data?.timestamp || new Date().toISOString(),
       };
+
+      if (apiError.message === "Validation failed" && apiError.meta?.fields) {
+        const fields = apiError.meta.fields;
+
+        // Mostrar cada error de campo
+        Object.values(fields).forEach((msg) => {
+          toast.error(String(msg));
+        });
+
+        return Promise.reject(apiError);
+      }
+
       toast.error(apiError.message);
       return Promise.reject(apiError);
     }

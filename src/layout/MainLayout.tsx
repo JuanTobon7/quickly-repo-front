@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { Menu, ChevronsLeft, ChevronsRight, LogOut, User } from 'lucide-react';
-import { Building2, Files, PackageSearch, Settings2, UsersRound } from 'lucide-react';
+import { Building2, Files, PackageSearch, Settings2, UsersRound, BookOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { getUser, logout } from '@/services/api/auth';
 import { toast } from 'sonner';
@@ -54,11 +54,11 @@ const MainLayout = ({
 	const navigate = useNavigate();
 	const user = getUser();
 
-	const handleLogout = () => {
+	const handleLogout = useCallback(() => {
 		logout();
 		toast.success('Sesión cerrada correctamente');
 		navigate('/login');
-	};
+	}, [navigate]);
 
 	return (
 		<div className="app-shell flex bg-background text-secondary h-screen">
@@ -94,38 +94,47 @@ const MainLayout = ({
 				</div>
 
 				{/* Sidebar Items */}
-				<nav className="flex flex-1 flex-col gap-4">
-					{sidebarItems.map(({ label, icon: Icon, value }) => {
-						const isActive = value === activeSidebar;
-						const handleClick = () => {
-							if (value === 'third-parties') {
-								navigate('/third-parties');
-							} else if (value === 'inventory') {
-								navigate('/inventory');
-							}
-						};
-						return (
-							<button
-								key={value}
-								type="button"
-								onClick={handleClick}
-								className={`group flex items-center gap-3 rounded-3xl border px-2 py-3 text-sm font-semibold transition ${
-									isActive
-										? 'border-primary/60 bg-primary text-white shadow-soft'
-										: 'border-transparent text-secondary hover:border-primary/40 hover:bg-primary/5'
-								}`}
-							>
-								<span
-									className={`flex h-10 w-10 items-center justify-center rounded-2xl ${
-										isActive ? 'bg-white/10 text-white' : 'bg-primary/12 text-primary'
+				<nav className="flex flex-1 flex-col gap-4 justify-between">
+					<div className='flex flex-1 flex-col gap-4'>
+						{sidebarItems.map(({ label, icon: Icon, value }) => {
+							const isActive = value === activeSidebar;
+							const handleClick = () => {
+								if (value === 'third-parties') {
+									navigate('/third-parties');
+								} else if (value === 'inventory') {
+									navigate('/inventory');
+								}
+							};
+							return (
+								<button
+									key={value}
+									type="button"
+									onClick={handleClick}
+									className={`group flex items-center gap-3 rounded-3xl border px-2 py-3 text-sm font-semibold transition ${
+										isActive
+											? 'border-primary/60 bg-primary text-white shadow-soft'
+											: 'border-transparent text-secondary hover:border-primary/40 hover:bg-primary/5'
 									}`}
 								>
-									<Icon className="h-5 w-5" />
-								</span>
-								{!sidebarCollapsed && <span className={isActive ? 'text-white' : 'text-secondary'}>{label}</span>}
-							</button>
-						);
-					})}
+									<span
+										className={`flex h-10 w-10 items-center justify-center rounded-2xl ${
+											isActive ? 'bg-white/10 text-white' : 'bg-primary/12 text-primary'
+										}`}
+									>
+										<Icon className="h-5 w-5" />
+									</span>
+									{!sidebarCollapsed && <span className={isActive ? 'text-white' : 'text-secondary'}>{label}</span>}
+								</button>
+							);
+						})}
+					</div>
+					<a
+					className=' `group rounded-3xl border px-2 py-3 font-semibold transition flex items-center gap-2 border-transparent text-sm text-secondary hover:border-primary/40 hover:bg-primary/5'
+					target="_blank"
+					href='https://docs-mayorista.vercel.app/'>
+						<BookOpen className='text-primary h-5 w-5'/>
+						Manual de Usuario
+					</a>
 				</nav>
 			</aside>
 
@@ -283,4 +292,4 @@ const MainLayout = ({
 	);
 };
 
-export default MainLayout;
+export default memo(MainLayout);

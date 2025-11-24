@@ -4,8 +4,8 @@ import ProductLineSection from '../components/parameterization/ProductLineSectio
 import SupplierSection from '../components/parameterization/ProviderSection';
 import MeasurementUnitSection from '../components/parameterization/MeasurementUnitSection';
 import { TaxSection } from '../components/parameterization/TaxSection';
+import PriceScaleNameSection from '../components/parameterization/PriceScaleNameSection';
 import { useState, useEffect } from 'react';
-import { providerType } from '@/types/providers';
 import GroupTypeSection from '@/components/parameterization/GroupTypeSection';
 import { useSystemMetadata } from '@/hooks/inventory/useSystemMetadata';
 
@@ -173,7 +173,7 @@ const ParametersView = () => {
           <div className="product-line-section"><ProductLineSection /></div>
         </div>
 
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-3 overflow-x-auto">
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 overflow-x-auto">
           <div className="supplier-section"><SupplierSection /></div>
           <div className="group-type-section"><GroupTypeSection /></div>
           <div className="unit-measure-section"><MeasurementUnitSection/></div>
@@ -181,6 +181,10 @@ const ParametersView = () => {
 
         <div className="grid gap-6 grid-cols-1">
           <div className="tax-section"><TaxSection /></div>
+        </div>
+
+        <div className="grid gap-6 grid-cols-1">
+          <div className="price-scale-section"><PriceScaleNameSection /></div>
         </div>
 
         <div className="flex flex-col sm:flex-row justify-end gap-3 border-t border-border pt-4">

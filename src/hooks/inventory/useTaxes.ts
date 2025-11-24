@@ -24,9 +24,6 @@ export function useTaxes() {
       queryClient.invalidateQueries({ queryKey: ['taxes'] });
       toast.success('Impuesto creado correctamente');
     },
-    onError: () => {
-      toast.error('Error al crear impuesto');
-    },
   });
 
   const updateMutation = useMutation({
@@ -36,9 +33,6 @@ export function useTaxes() {
       queryClient.invalidateQueries({ queryKey: ['taxes'] });
       toast.success('Impuesto actualizado correctamente');
     },
-    onError: () => {
-      toast.error('Error al actualizar impuesto');
-    },
   });
 
   const deleteMutation = useMutation({
@@ -46,9 +40,6 @@ export function useTaxes() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['taxes'] });
       toast.success('Impuesto eliminado correctamente');
-    },
-    onError: () => {
-      toast.error('Error al eliminar impuesto');
     },
   });
 

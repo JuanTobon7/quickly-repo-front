@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, HelpCircle, ImagePlus, ScanLine, Search, Loader2 } from 'lucide-react';
+import { useEffect, useState, useRef, memo, useCallback } from 'react';
+import { ChevronLeft, ChevronRight, HelpCircle, ScanLine, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
@@ -9,25 +9,25 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Product } from '@/services/api/products';
-import { useProducts } from '@/hooks/inventory/useProduct';
+import { getProductById, Product } from '@/services/api/products';
+import { UpsertPayload, useProducts } from '@/hooks/inventory/useProduct';
 import { GroupType } from '@/services/api/groupType';
 import { ProductLine } from '@/services/api/productLines';
 import { GenericDropdown } from '@/components/ui/DropDown';
 import { Brand } from '@/services/api/brands';
 import { Measurement } from '@/services/api/measurementUnits';
 import { useSystemMetadata } from '@/hooks/inventory/useSystemMetadata';
+import { usePriceScaleNames } from '@/hooks/inventory/usePriceScaleNames';
 import { BarcodeScanner } from '@/components/products/BarcodeScannerInput';
 import { startProductFormTour } from '@/config/productFormTour';
-import { checkImageServiceHealth, processImage, createImagePreviewUrl, revokeImagePreviewUrl } from '@/services/api/images';
-import ImageProcessModal from '@/components/products/ImageProcessModal';
 import { ProductTaxSection, PriceTaxData } from '@/components/products/ProductTaxSection';
-import { formatCurrency, formatInputCurrency, parseCurrency } from '@/utils/currency';
-import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { formatCurrency } from '@/utils/currency';
 import { PercentageInput } from '@/components/ui/PercentageInput';
+import { ProductImageUploader, ProductImageUploaderRef } from '@/components/products/ProductImageUploader';
+import { roundPrice } from '@/utils/fun';
 
 type ProductEditFormProps = {
-  productReference?: Product;
+  productReferenceId?: string;
   groupTypes: GroupType[];
   productLines: ProductLine[];
   measurementUnits: Measurement[];
@@ -36,181 +36,59 @@ type ProductEditFormProps = {
 };
 
 
-const ProductEditForm = ({ productReference,groupTypes,productLines,measurementUnits,brands, onClose }: ProductEditFormProps) => {
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [processedImageBlob, setProcessedImageBlob] = useState<Blob | null>(null);
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [imageServiceAvailable, setImageServiceAvailable] = useState<boolean | null>(null);
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [originalFile, setOriginalFile] = useState<File | null>(null);
-  const [originalPreview, setOriginalPreview] = useState<string>('');
-  const [processedPreview, setProcessedPreview] = useState<string>('');
-  const [product, setProduct] = useState<Product>(productReference|| {
-    id: '',
-    barCode: '',
-    code: "",
-    name: '',
-    description: '',
-    productLine: { id: '', name: '' },
-    brand: { id: '', name: '' },
-    measurement: { id: '', name: '' },
-    groupTypeProduct: { id: '', name: '' },
-    reference: '',
-    priceLevels: [],
-    roundingEnabled: false,
-    cost: 0,
-  });
-  const {setProduct: saveProduct, createMutation, updateMutation} = useProducts({});
+const ProductEditForm = ({ productReferenceId,groupTypes,productLines,measurementUnits,brands, onClose }: ProductEditFormProps) => {
+  const imageUploaderRef = useRef<ProductImageUploaderRef>(null);
+  
+  const [product, setProduct] = useState<Product>(null);
+  const {saveProduct} = useProducts({});
   const { systemMetadata, isLoading: loadingSystemMetadata } = useSystemMetadata();
-  const [selectedLine, setSelectedLine] = useState<string | undefined>(productReference?.productLine?.id);
-  const [selectedBrand, setSelectedBrand] = useState<string | undefined>(productReference?.brand?.id);
-  const [selectedGroup, setSelectedGroup] = useState<string | undefined>(productReference?.groupTypeProduct?.id);
-  const [selectedMeasurementUnit, setSelectedMeasurementUnit] = useState<string | undefined>(productReference?.measurement?.id);
-  const [cost, setCost] = useState<number>(productReference?.cost || 0);
-  const [roundingEnabled, setRoundingEnabled] = useState<boolean>(productReference?.roundingEnabled || false);
+  const { activePriceScaleNames } = usePriceScaleNames();
+  const [selectedLine, setSelectedLine] = useState<string | undefined>(product?.productLine?.id);
+  const [selectedBrand, setSelectedBrand] = useState<string | undefined>(product?.brand?.id);
+  const [selectedGroup, setSelectedGroup] = useState<string | undefined>(product?.groupTypeProduct?.id);
+  const [selectedMeasurementUnit, setSelectedMeasurementUnit] = useState<string | undefined>(product?.measurement?.id);
+  const [cost, setCost] = useState<number>(product?.cost);
+  const [roundingEnabled, setRoundingEnabled] = useState<boolean>(product?.roundingEnabled || false);
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [taxData, setTaxData] = useState<PriceTaxData>({
-    basePrice: 0,
-    priceIncludesTax: false,
-    selectedTaxes: [],
-    priceBeforeTaxes: 0,
-    priceAfterTaxes: 0,
-  });
+  const [taxData, setTaxData] = useState<PriceTaxData>(null);
   // Estado para niveles de precio editables
   type PriceLevel = {
+    priceScaleNameId: string;
     position: number;
     name: string;
     profitPercentage: number;
     salePrice: number;
   };
-  
-  const [editableLevels, setEditableLevels] = useState<PriceLevel[]>([
-    { position: 1, name: 'Mayorista', profitPercentage: 100, salePrice: 0 },
-    { position: 2, name: 'Minorista', profitPercentage: 90, salePrice: 0 },
-    { position: 3, name: 'Distribuidor', profitPercentage: 40, salePrice: 0 },
-    { position: 4, name: 'Especial', profitPercentage: 30, salePrice: 0 },
-    { position: 5, name: 'VIP', profitPercentage: 20, salePrice: 0 },
-    { position: 6, name: 'Empleado', profitPercentage: 10, salePrice: 0 },
-  ]);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [editableLevels, setEditableLevels] = useState<PriceLevel[]>([]);
 
-    // Validate file size
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      toast.error(`El archivo supera el límite de 10 MB. Tamaño: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-      return;
-    }
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error(`Formato no soportado. Use JPEG, PNG o WEBP`);
-      return;
-    }
-
-    // Create preview of original
-    const originalUrl = URL.createObjectURL(file);
-    setOriginalFile(file);
-    setOriginalPreview(originalUrl);
-
-    // Check if service is available
-    setIsProcessingImage(true);
-    try {
-      const health = await checkImageServiceHealth();
-      
-      if (!health.success || health.data.status === 'unavailable') {
-        toast.warning('Servicio de procesamiento no disponible. Usando imagen original.');
-        setImagePreview(originalUrl);
-        setIsProcessingImage(false);
-        return;
-      }
-
-      // Process image
-      toast.info('Procesando imagen...');
-      const processedBlob = await processImage(file, {
-        maxWidth: 1200,
-        quality: 85,
-        removeBackground: true,
-        addWhiteBackground: true,
-      });
-
-      const processedUrl = createImagePreviewUrl(processedBlob);
-      setProcessedPreview(processedUrl);
-      setProcessedImageBlob(processedBlob);
-      
-      // Show modal to compare
-      setShowImageModal(true);
-      setIsProcessingImage(false);
-      
-    } catch (error: any) {
-      console.error('Error processing image:', error);
-      toast.error(error.message || 'Error al procesar la imagen');
-      // Use original on error
-      setImagePreview(originalUrl);
-      setIsProcessingImage(false);
-    }
-  };
-
-  const handleAcceptProcessedImage = (blob: Blob, url: string) => {
-    setImagePreview(url);
-    setProcessedImageBlob(blob);
-    setShowImageModal(false);
-    toast.success('Imagen procesada aplicada correctamente');
-    
-    // Clean up original preview
-    if (originalPreview) {
-      revokeImagePreviewUrl(originalPreview);
-    }
-  };
-
-  const handleCancelImageProcess = () => {
-    setShowImageModal(false);
-    // Clean up URLs
-    if (originalPreview) revokeImagePreviewUrl(originalPreview);
-    if (processedPreview) revokeImagePreviewUrl(processedPreview);
-    setOriginalFile(null);
-    setProcessedImageBlob(null);
-    toast.info('Procesamiento de imagen cancelado');
-  };
-
-  const handleSelectNewImage = () => {
-    setShowImageModal(false);
-    // Clean up URLs
-    if (originalPreview) revokeImagePreviewUrl(originalPreview);
-    if (processedPreview) revokeImagePreviewUrl(processedPreview);
-    setOriginalFile(null);
-    setProcessedImageBlob(null);
-    // Trigger file input click
-    document.querySelector<HTMLInputElement>('input[type="file"][accept="image/*"]')?.click();
-  };
-
-  // Check image service health on mount
-  useEffect(() => {
-    const checkService = async () => {
-      try {
-        const health = await checkImageServiceHealth();
-        setImageServiceAvailable(health.success && health.data.status === 'available');
-      } catch {
-        setImageServiceAvailable(false);
-      }
-    };
-    checkService();
+  // Memoizar callback de taxData para evitar re-renders de ProductTaxSection
+  const handleTaxDataChange = useCallback((data: PriceTaxData) => {
+    setTaxData(data);
   }, []);
 
-  // Cleanup URLs on unmount
   useEffect(() => {
-    return () => {
-      if (imagePreview && imagePreview.startsWith('blob:')) {
-        revokeImagePreviewUrl(imagePreview);
-      }
-      if (originalPreview) revokeImagePreviewUrl(originalPreview);
-      if (processedPreview) revokeImagePreviewUrl(processedPreview);
-    };
-  }, []);
-  
+    const fetchProduct = async () => {
+      const result = await getProductById(productReferenceId)
+      setProduct(result)
+    }
+
+    fetchProduct()
+  }, [productReferenceId])
+
+  useEffect(() => {
+    if (!product || !product.id) return;
+
+    setTaxData({
+      basePrice: product.cost,
+      priceIncludesTax: !!product.taxes,
+      selectedTax: product.taxes || null,
+      priceBeforeTaxes: product?.priceBeforeTaxes,
+      priceAfterTaxes: product?.priceAfterTaxes,
+    });
+  }, [product]);
+
+
   const handleChange = (key: keyof Product, value: any) => {
     setProduct((prev) => {
       const updated = { ...prev, [key]: value };
@@ -219,27 +97,27 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
   };
 
   
-    const handleScan = (code: string) => {
-      handleChange('barCode', code)
-      setIsScanning(false)         
-    }
+  const handleScan = (code: string) => {
+    handleChange('barCode', code)
+    setIsScanning(false)         
+  }
 
   // Función de redondeo basada en el valor configurado
-  const roundPrice = (price: number, roundingValue: number): number => {
-    return Math.ceil(price / roundingValue) * roundingValue;
-  };
-
   // Calcular precio de venta basado en costo y porcentaje de utilidad
-  const calculateSalePrice = (cost: number, profitPercentage: number): number => {
-    if (!cost || cost <= 0) return 0;
+  const calculateSalePrice = (baseCost: number, profitPercentage: number): number => {
+    if(!product) return;
+    // Usar priceAfterTaxes si está disponible, de lo contrario usar cost
+    const costToUse = taxData?.priceAfterTaxes > 0 ? taxData?.priceAfterTaxes : baseCost;
     
-    const profit = (cost * profitPercentage) / 100;
-    let price = cost + profit;
+    if (!costToUse || costToUse <= 0) return 0;
+    
+    const profit = (costToUse * profitPercentage) / 100;
+    let price = costToUse + profit;
 
     // Aplicar utilidad mínima si está configurada
     if (systemMetadata?.minimumProfitPercentage) {
-      const minProfit = (cost * systemMetadata.minimumProfitPercentage) / 100;
-      const minPrice = cost + minProfit;
+      const minProfit = (costToUse * systemMetadata.minimumProfitPercentage) / 100;
+      const minPrice = costToUse + minProfit;
       if (price < minPrice) {
         price = minPrice;
       }
@@ -253,11 +131,28 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
     return price;
   };
 
-  // Recalcular todos los niveles cuando cambia el costo, systemMetadata o roundingEnabled
+  // Inicializar niveles desde nombres activos cuando están disponibles
   useEffect(() => {
-    if (cost > 0) {
+    if(!product) return;
+    if (activePriceScaleNames && activePriceScaleNames.length > 0 && editableLevels.length === 0) {
+      const initialLevels = activePriceScaleNames.map(scaleName => ({
+        priceScaleNameId: scaleName.id,
+        position: scaleName.position,
+        name: scaleName.name,
+        profitPercentage: 0,
+        salePrice: 0,
+      }));
+      setEditableLevels(initialLevels);
+    }
+  }, [activePriceScaleNames, product]);
+
+  // Recalcular todos los niveles cuando cambia el costo, systemMetadata, roundingEnabled o taxData
+  useEffect(() => {
+    if(!product) return;
+    const baseCost = taxData?.priceAfterTaxes > 0 ? taxData?.priceAfterTaxes : cost;
+    if (baseCost > 0 && editableLevels.length > 0) {
       const updatedLevels = editableLevels.map(level => {
-        const salePrice = calculateSalePrice(cost, level.profitPercentage);
+        const salePrice = calculateSalePrice(baseCost, level.profitPercentage);
         return {
           ...level,
           salePrice,
@@ -265,20 +160,23 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
       });
       setEditableLevels(updatedLevels);
     }
-  }, [cost, systemMetadata, roundingEnabled]);
+  }, [cost, systemMetadata, roundingEnabled, taxData?.priceAfterTaxes, product]);
 
   // Sincronizar cost con taxData.basePrice cuando el usuario edita los impuestos
   useEffect(() => {
+    if(!product) return;
     if (taxData.basePrice > 0 && taxData.basePrice !== cost) {
       setCost(taxData.basePrice);
     }
-  }, [taxData.basePrice]);
+  }, [taxData?.basePrice, product]);
 
   // Actualizar un nivel específico cuando cambia el porcentaje de utilidad
   const updateLevelProfitPercentage = (position: number, profitPercentage: number) => {
+    if(!product) return;
+    const baseCost = taxData.priceAfterTaxes > 0 ? taxData.priceAfterTaxes : cost;
     const updatedLevels = editableLevels.map(level => {
       if (level.position === position) {
-        const salePrice = calculateSalePrice(cost, profitPercentage);
+        const salePrice = calculateSalePrice(baseCost, profitPercentage);
         return {
           ...level,
           profitPercentage,
@@ -290,89 +188,104 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
     setEditableLevels(updatedLevels);
   };
 
-  // Actualizar el nombre de un nivel
-  const updateLevelName = (position: number, name: string) => {
-    const updatedLevels = editableLevels.map(level => {
-      if (level.position === position) {
-        return {
-          ...level,
-          name,
-        };
-      }
-      return level;
-    });
-    setEditableLevels(updatedLevels);
-  };
-
-  const handleSave = () => {
-    console.log('Guardando producto:', product);
-
+  const handleSave = async () => {
     if (!product) return;
 
     if (!selectedLine || !selectedBrand || !selectedMeasurementUnit || !selectedGroup) {
       toast.error("Debe seleccionar línea, marca, unidad de medida y grupo");
       return;
     }
+    try {
+      const payload: UpsertPayload = {
+        id: product.id || undefined,
+        barCode: product.barCode,
+        name: product.name,
+        productLineId: selectedLine,
+        brandId: selectedBrand,
+        reference: product.reference,
+        description: product.description,
+        measurementId: selectedMeasurementUnit,
+        groupId: selectedGroup,
+        priceLevels: editableLevels.map(level => ({
+          priceScaleNameId: level.priceScaleNameId,
+          profitPercentage: level.profitPercentage,
+        })),
+        roundingEnabled,
+        cost,
+        priceBeforeTaxes: taxData.priceBeforeTaxes || undefined,
+        priceAfterTaxes: taxData.priceAfterTaxes || undefined,
+        taxId: taxData.selectedTax?.id || undefined,
+      };
 
-    const payload = {
-      id: product?.id || undefined,
-      barCode: product.barCode,
-      name: product.name,
-      productLineId: selectedLine,
-      brandId: selectedBrand,
-      reference: product.reference,
-      description: product.description,
-      measurementId: selectedMeasurementUnit,
-      groupId: selectedGroup,
-      priceLevels: editableLevels.map(level => ({
-        position: level.position,
-        name: level.name,
-        profitPercentage: level.profitPercentage,
-      })),
-      roundingEnabled: roundingEnabled,
-      cost: cost,
-    };
+      // ⚡ Guardar producto primero
+      const saved = await saveProduct(payload);
+      setProduct(saved);
 
-    saveProduct(payload);
+      // ⚡ Subir imágenes pendientes al servidor usando el componente
+      if (imageUploaderRef.current && saved.id) {
+        const success = await imageUploaderRef.current.uploadPendingImages();
+        if (success) {
+          toast.success('Producto e imágenes guardados exitosamente');
+        } else {
+          toast.warning('Producto guardado pero hubo problemas con algunas imágenes');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+    }
   };
 
-  // Mostrar mensaje de éxito cuando se guarde el producto
-  useEffect(() => {
-    if (createMutation.isSuccess) {
-      toast.success("Producto creado correctamente");
-    }
-    if (updateMutation.isSuccess) {
-      toast.success("Producto actualizado correctamente");
-    }
-  }, [createMutation.isSuccess, updateMutation.isSuccess]);
-
   useEffect(()=>{
-    if (productReference) {
-      setProduct(productReference);
-      setSelectedLine(productReference.productLine?.id);
-      setSelectedBrand(productReference.brand?.id);
-      setSelectedMeasurementUnit(productReference.measurement?.id);
-      setSelectedGroup(productReference.groupTypeProduct?.id);
-      setCost(productReference.cost || 0);
-      setRoundingEnabled(productReference.roundingEnabled || false);
-      
-      // Cargar niveles de precio si existen
-      if (productReference.priceLevels && productReference.priceLevels.length > 0) {
-        const loadedLevels = productReference.priceLevels
-          .sort((a, b) => a.position - b.position)
-          .map(level => {
-            const salePrice = calculateSalePrice(productReference.cost || 0, level.profitPercentage);
-            return {
-              position: level.position,
-              name: level.name,
-              profitPercentage: level.profitPercentage,
-              salePrice,
-            };
-          });
-        setEditableLevels(loadedLevels);
-      }
+    if (!product) return;
+    setProduct(product);
+    setSelectedLine(product.productLine?.id);
+    setSelectedBrand(product.brand?.id);
+    setSelectedMeasurementUnit(product.measurement?.id);
+    setSelectedGroup(product.groupTypeProduct?.id);
+    setCost(product?.cost || 0);
+    setRoundingEnabled(product.roundingEnabled || false);
+    
+    // Cargar datos de impuestos (siempre inicializar taxData)
+    setTaxData({
+      basePrice: product?.cost || 0,
+      priceIncludesTax: false,
+      selectedTax: product.taxes || null,
+      priceBeforeTaxes: product.priceBeforeTaxes || 0,
+      priceAfterTaxes: product.priceAfterTaxes || 0,
+    });
+    
+    // Cargar niveles de precio si existen
+    if (product.priceLevels && product.priceLevels.length > 0) {
+      const baseCost = product.priceAfterTaxes || product?.cost || 0;
+      const loadedLevels = product.priceLevels
+        .sort((a, b) => a.position - b.position)
+        .map(level => {
+          const salePrice = calculateSalePrice(baseCost, level.profitPercentage);
+          return {
+            priceScaleNameId: level.priceScaleNameId || '',
+            position: level.position,
+            name: level.name,
+            profitPercentage: level.profitPercentage,
+            salePrice,
+          };
+        });
+      setEditableLevels(loadedLevels);
     }
-  },[productReference])
+      
+      // Intentar cargar imágenes pendientes desde localStorage
+      if (product.id) {
+        const storageKey = `product_images_${product.id}`;
+        const storedImages = localStorage.getItem(storageKey);
+        if (storedImages) {
+          try {
+            const parsedImages = JSON.parse(storedImages);
+           
+          } catch (error) {
+            console.error('Error parsing stored images:', error);
+          }
+        }
+      }
+  },[product])
 
   return (
     <section className="h-auto w-full space-y-8 pb-9 ">
@@ -447,7 +360,7 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
                 <label className="w-full sm:w-32 pt-2 text-sm font-medium text-secondary">Nombre del producto:</label>
                 <input
                   type="text"
-                  defaultValue={product?.name}
+                  value={product?.name ?? ""}
                   onChange={(e)=> handleChange('name', e.target.value)}
                   className="flex-1 min-w-[120px] rounded-lg border border-border bg-white px-3 py-2 text-sm"
                 />
@@ -536,11 +449,13 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
               {/* Tax Configuration Section */}
               <div className="product-tax-section mt-4">
                 <ProductTaxSection
-                  initialBasePrice={cost}
-                  initialPriceIncludesTax={false}
-                  initialSelectedTaxes={[]}
-                  onChange={(data) => setTaxData(data)}
+                  key={product?.id || 'new-product'}
+                  initialBasePrice={taxData?.basePrice || cost}
+                  initialPriceIncludesTax={taxData?.priceIncludesTax}
+                  initialSelectedTax={taxData?.selectedTax}
+                  onChange={handleTaxDataChange}
                 />
+
               </div>
             </div>
 
@@ -577,45 +492,16 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
                     strokeWidth={1.75}
                     size={18}
                   />
-                </div>
               </div>
+            </div>
 
-              {/* Imagen */}
-              <div className="product-image-section flex justify-center mt-4">
-                <div className="relative aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl border-2 border-dashed border-border/60 bg-white">
-                  {isProcessingImage ? (
-                    <div className="flex h-full flex-col items-center justify-center">
-                      <Loader2 className="mb-2 h-12 w-12 animate-spin text-primary" />
-                      <p className="text-xs text-muted">Procesando imagen...</p>
-                    </div>
-                  ) : imagePreview ? (
-                    <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center">
-                      <ImagePlus className="mb-2 h-12 w-12 text-muted/40" />
-                      <p className="text-xs text-muted">Subir imagen</p>
-                      {imageServiceAvailable === false && (
-                        <p className="mt-2 text-xs text-amber-600">⚠ Servicio no disponible</p>
-                      )}
-                      {imageServiceAvailable === true && (
-                        <p className="mt-2 text-xs text-green-600">✓ Procesamiento activo</p>
-                      )}
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    disabled={isProcessingImage}
-                    className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                  />
-                  <button className="absolute right-2 top-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-md">
-                    Nuevo
-                  </button>
-                </div>
-              </div>
-
-              {/* Redondeo checkbox */}
+              {/* Imagen - Carrusel */}
+              <div className="product-image-section">
+                <ProductImageUploader 
+                  productId={product?.id}
+                  ref={imageUploaderRef}
+                />
+              </div>              {/* Redondeo checkbox */}
               <div className="product-rounding-checkbox">
                 <label className="mb-1 block text-xs font-medium text-secondary">Redondear precio:</label>
                 <div className="flex items-center gap-2 mt-2">
@@ -686,13 +572,7 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
                       <span className="font-semibold text-red-600">({level.position})</span>
                     </TableCell>
                     <TableCell className="price-level-name">
-                      <input
-                        type="text"
-                        value={level.name}
-                        onChange={(e) => updateLevelName(level.position, e.target.value)}
-                        className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
-                        placeholder="Nombre del nivel"
-                      />
+                      <span className="text-sm font-medium text-secondary">{level.name}</span>
                     </TableCell>
                     <TableCell className="price-profit-percentage">
                       <PercentageInput
@@ -720,19 +600,6 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
         </div>
       </div>
 
-      {/* Image Process Modal */}
-      {showImageModal && originalFile && processedImageBlob && (
-        <ImageProcessModal
-          originalFile={originalFile}
-          originalPreview={originalPreview}
-          processedBlob={processedImageBlob}
-          processedPreview={processedPreview}
-          onAccept={handleAcceptProcessedImage}
-          onCancel={handleCancelImageProcess}
-          onSelectNew={handleSelectNewImage}
-        />
-      )}
-
       {isScanning && (
         <BarcodeScanner
           isScanning={isScanning}
@@ -744,4 +611,4 @@ const ProductEditForm = ({ productReference,groupTypes,productLines,measurementU
   );
 };
 
-export default ProductEditForm;
+export default memo(ProductEditForm);

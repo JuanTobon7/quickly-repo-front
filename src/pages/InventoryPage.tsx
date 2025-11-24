@@ -1,16 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { set, useForm, type UseFormRegisterReturn } from 'react-hook-form';
+import { useCallback, useEffect, useMemo, useState, memo } from 'react';
+import { useForm } from 'react-hook-form';
 import {
-  ArrowDownToLine,
   ArrowRightLeft,
   FileDown,
   HelpCircle,
-  Icon,
-  LucideIcon,
   Printer,
   ScanLine,
-  Search,
-  Star,
+  Star
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -27,7 +23,7 @@ import { useGroupTypes } from '@/hooks/inventory/useGroupType';
 import { useBrands } from '@/hooks/inventory/useBrands';
 import { useMeasurementUnits } from '@/hooks/inventory/useMeasurementUnits';
 import { useProducts } from '@/hooks/inventory/useProduct';
-import type { Product, ProductQueryParams } from '@/services/api/products';
+import type { Product, ProductQueryParams, ProductSummary } from '@/services/api/products';
 import { importProducts } from '@/services/api/products';
 import { PageableRequest } from '@/services/api/client';
 import FilterInput from '@/components/forms/FilterInput';
@@ -37,6 +33,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { ExportPdfModal, type ExportFilters } from '@/components/modals/ExportPdfModal';
 import api from '@/services/api/client';
 import ImportButton from '@/components/ui/ImportButton';
+import { usePriceScaleNames } from '@/hooks/inventory/usePriceScaleNames';
 type FilterForm = {
   company: string;
   costCenter: string;
@@ -70,7 +67,7 @@ const formatNumber = (value: number) => value.toLocaleString('es-CO');
 
 const InventoryPage = () => {
   const [activeTab, setActiveTab] = useState<(typeof MODULE_TABS)[number]['value']>('products');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<string>(null);
   const [isNewProduct, setIsNewProduct] = useState<boolean|null>(null);
   // Estados individuales para cada dropdown
   const [selectedLine, setSelectedLine] = useState<string | undefined>();
@@ -78,8 +75,9 @@ const InventoryPage = () => {
   const [selectedBrand, setSelectedBrand] = useState<string | undefined>();
   const [selectedMeasurementUnit, setSelectedMeasurementUnit] = useState<string | undefined>();
   const [selectedTax, setSelectedTax] = useState<string | undefined>();
-  const [pageableRequest, setPageableRequest] = useState<PageableRequest>({ size: 10, page: 0 });
-  const { register, handleSubmit, reset, watch, setValue } = useForm<FilterForm>({
+  const [pageableRequest, setPageableRequest] = useState<PageableRequest>();
+  const {priceScaleNames} = usePriceScaleNames()
+  const { register, reset, watch, setValue } = useForm<FilterForm>({
     defaultValues: {
       company: 'EL MAYORISTA SAS',
       costCenter: '',
@@ -138,16 +136,6 @@ const InventoryPage = () => {
   const { products, isLoading, totalPages } = useProducts(params);
 
   // Extraer todos los niveles de precio únicos de los productos
-  const priceLevels = useMemo(() => {
-    const uniqueLevels = new Set<string>();
-    products.forEach(product => {
-      product.priceLevels?.forEach(level => {
-        uniqueLevels.add(level.name);
-      });
-    });
-    return Array.from(uniqueLevels).map(name => ({ name }));
-  }, [products]);
-
   const [isExporting, setIsExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
@@ -178,11 +166,8 @@ const InventoryPage = () => {
         responseType: 'blob',
       });
 
-      console.log(`${formatLabel} Response:`, response);
-      
       // Create blob from response
       const blob = new Blob([response.data], { type: mimeType });
-      console.log('Blob size:', blob.size, 'type:', blob.type);
       
       if (blob.size === 0) {
         throw new Error(`El archivo ${formatLabel} generado está vacío`);
@@ -217,50 +202,72 @@ const InventoryPage = () => {
   const goBack = useCallback(()=> {
     setSelectedProduct(null);
     setIsNewProduct(null);
-  },[])
+  },[]);
 
-  const columns = useMemo<ColumnDef<Product>[]>(
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab as typeof activeTab);
+  }, []);
+
+  const columns = useMemo<ColumnDef<ProductSummary>[]>(
     () => [
       {
-        header: 'ID',
-        accessorKey: 'id',
+        header: "Código",
+        accessorKey: "code",
         cell: (info) => (
-          <span className="font-medium text-secondary">{info.getValue<string>()}</span>
+          <span className="font-medium text-secondary">
+            {info.getValue<string>()}
+          </span>
         ),
       },
       {
-        header: 'Código de Barras',
-        accessorKey: 'barCode',
-        cell: (info) => <span className="text-secondary">{info.getValue<string>()}</span>,
+        header: "Referencia",
+        accessorKey: "reference",
+        cell: (info) => (
+          <span className="text-secondary text-sm">
+            {info.getValue<string>()}
+          </span>
+        ),
       },
       {
-        header: 'Nombre',
-        accessorKey: 'name',
-        cell: (info) => <span className="font-medium text-secondary">{info.getValue<string>()}</span>,
+        header: "Nombre",
+        accessorKey: "name",
+        cell: (info) => (
+          <span className="font-medium text-secondary">
+            {info.getValue<string>()}
+          </span>
+        ),
       },
       {
-        header: 'Marca',
-        accessorFn: (row) => row.brand.name,
-        cell: (info) => <span className="text-secondary">{info.getValue<string>()}</span>,
+        header: "Cantidad",
+        accessorKey: "quantity",
+        cell: (info) => (
+          <span className="text-secondary font-mono">
+            {info.getValue<number>()}
+          </span>
+        ),
       },
       {
-        header: 'Línea',
-        accessorFn: (row) => row.productLine.name,
-        cell: (info) => <span className="text-secondary">{info.getValue<string>()}</span>,
+        header: "Costo",
+        accessorKey: "cost",
+        cell: (info) => (
+          <span className="text-secondary">
+            {formatCurrency(info.getValue<number>())}
+          </span>
+        ),
       },
       {
-        header: 'Unidad de Medida',
-        accessorFn: (row) => row.measurement.name,
-        cell: (info) => <span className="text-secondary">{info.getValue<string>()}</span>,
-      },
-      {
-        header: 'Descripción',
-        accessorKey: 'description',
-        cell: (info) => <span className="text-secondary text-xs">{info.getValue<string>() || '-'}</span>,
+        header: "Precio Venta",
+        accessorKey: "priceSale",
+        cell: (info) => (
+          <span className="text-secondary">
+            {formatCurrency(info.getValue<number>())}
+          </span>
+        ),
       },
     ],
     []
-  );
+  )
+
 
   const resetFilters = () => {
     setSelectedBrand(undefined);
@@ -411,7 +418,7 @@ const InventoryPage = () => {
             type="button"
             onClick={() => {
               setSelectedProduct(null)
-              setIsNewProduct(true)
+              setIsNewProduct(selectedProduct? false : true)
             }}
             className="btn-new-product inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-white shadow-md shadow-primary/30 transition hover:translate-y-[1px] hover:shadow-none"
           >
@@ -440,14 +447,15 @@ const InventoryPage = () => {
 
       <div className="products-table rounded-3xl border border-border/70 bg-white/90 p-4 shadow-soft">
         <h2 className="mb-4 text-lg font-semibold text-secondary">Catálogo de productos</h2>
-        <DataTable<Product>
+        <DataTable<ProductSummary>
           columns={columns}
           pageCount={totalPages}
           manualPagination={true}
+          variant='pos'
           pageFun={setPageableRequest}
           data={products}
           isLoading={isLoading}
-          onRowSelect={setSelectedProduct}
+          onRowSelect={(row) => setSelectedProduct(row.id)}
           emptyState="No se encontraron productos con los filtros seleccionados."
         />
       </div>
@@ -459,9 +467,7 @@ const InventoryPage = () => {
       moduleName="Inventarios"
       tabs={MODULE_TABS.map(({ label, value }) => ({ label, value }))}
       activeTab={activeTab}
-      onTabChange={(next) =>
-        setActiveTab(next as (typeof MODULE_TABS)[number]['value'])
-      }
+      onTabChange={handleTabChange}
       activeSidebar="inventory"
     >
       {activeTab === 'parameters' && 
@@ -483,7 +489,7 @@ const InventoryPage = () => {
                 groupTypes={groupTypes}
                 productLines={productLines}
                 measurementUnits={measurementUnits}
-                productReference={selectedProduct} 
+                productReferenceId={selectedProduct} 
                 onClose={goBack} 
               />
             )
@@ -495,7 +501,7 @@ const InventoryPage = () => {
                 groupTypes={groupTypes}
                 measurementUnits={measurementUnits}
                 productLines={productLines}
-                productReference={selectedProduct} 
+                productReferenceId={selectedProduct} 
                 onClose={goBack} 
               />
             )
@@ -511,7 +517,7 @@ const InventoryPage = () => {
         brands={brands}
         productLines={productLines}
         measurementUnits={measurementUnits}
-        priceLevels={priceLevels}
+        priceLevels={priceScaleNames}
         isExporting={isExporting}
       />
     </MainLayout>

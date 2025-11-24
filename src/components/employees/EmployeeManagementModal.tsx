@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Loader2, Building2, Trash2 } from 'lucide-react';
 import { useEmployees } from '@/hooks/inventory/useEmployees';
 import { useEmployeeCostCenters } from '@/hooks/inventory/useEmployeeCostCenters';
@@ -54,40 +55,42 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
 
   const isProcessing = assignMutation.isPending || removeMutation.isPending;
 
-  return (
+  if (!isOpen) return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="flex h-[90vh] w-full max-w-6xl flex-col rounded-2xl bg-white shadow-2xl">
+      <div className="flex my-8 h-auto max-h-[90vh] w-full max-w-6xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6 sm:py-4">
           <div>
-            <h2 className="text-2xl font-bold text-secondary">Gestión de Empleados</h2>
-            <p className="text-sm text-muted">Administrar asignaciones a centros de costo</p>
+            <h2 className="text-xl font-bold text-secondary sm:text-2xl">Gestión de Empleados</h2>
+            <p className="text-xs text-muted sm:text-sm">Administrar asignaciones a centros de costo</p>
           </div>
           <button
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-100 transition"
+            className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-gray-100 sm:h-10 sm:w-10"
           >
-            <X className="h-6 w-6 text-secondary" />
+            <X className="h-5 w-5 text-secondary sm:h-6 sm:w-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
           {hasErrors ? (
-            <div className="flex flex-1 items-center justify-center p-8">
-              <div className="text-center max-w-md">
+            <div className="flex flex-1 items-center justify-center p-4 sm:p-8">
+              <div className="max-w-md text-center">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
                   <X className="h-8 w-8 text-red-600" />
                 </div>
-                <h3 className="text-lg font-semibold text-secondary mb-2">
+                <h3 className="mb-2 text-lg font-semibold text-secondary">
                   Error al cargar datos
                 </h3>
-                <p className="text-sm text-muted mb-4">
-                  No se pudieron cargar los empleados o centros de costo. Esto puede deberse a que los endpoints no están disponibles o requieren configuración adicional.
+                <p className="mb-4 text-sm text-muted">
+                  No se pudieron cargar los empleados o centros de costo.
                 </p>
                 <button
                   onClick={onClose}
-                  className="rounded-lg bg-primary px-6 py-2 font-semibold text-white hover:bg-primary/90 transition"
+                  className="rounded-lg bg-primary px-6 py-2 font-semibold text-white transition hover:bg-primary/90"
                 >
                   Cerrar
                 </button>
@@ -96,14 +99,14 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
           ) : (
             <>
           {/* Left Panel - Employee List */}
-          <div className="w-1/2 border-r border-border flex flex-col">
-            <div className="border-b border-border bg-gray-50 px-4 py-3">
+          <div className="flex w-full flex-col border-b border-border md:w-1/2 md:border-b-0 md:border-r">
+            <div className="border-b border-border bg-gray-50 px-3 py-2 sm:px-4 sm:py-3">
               <h3 className="font-semibold text-secondary">Empleados</h3>
               <p className="text-xs text-muted">Seleccione un empleado para ver sus asignaciones</p>
             </div>
 
             {loadingEmployees ? (
-              <div className="flex flex-1 items-center justify-center">
+              <div className="flex flex-1 items-center justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : (
@@ -112,16 +115,16 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
                   <button
                     key={employee.id}
                     onClick={() => handleSelectEmployee(employee)}
-                    className={`w-full border-b border-border px-4 py-3 text-left transition hover:bg-gray-50 ${
-                      selectedEmployee?.id === employee.id ? 'bg-primary/5 border-l-4 border-l-primary' : ''
+                    className={`w-full border-b border-border px-3 py-2.5 text-left transition hover:bg-gray-50 sm:px-4 sm:py-3 ${
+                      selectedEmployee?.id === employee.id ? 'border-l-4 border-l-primary bg-primary/5' : ''
                     }`}
                   >
-                    <p className="font-semibold text-secondary">
+                    <p className="text-sm font-semibold text-secondary sm:text-base">
                       {employee.name} {employee.lastname}
                     </p>
-                    <p className="text-sm text-muted">{employee.email}</p>
+                    <p className="text-xs text-muted sm:text-sm">{employee.email}</p>
                     <div className="mt-1 flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-primary" />
+                      <Building2 className="h-3.5 w-3.5 text-primary sm:h-4 sm:w-4" />
                       <span className="text-xs font-medium text-primary">
                         {employee.costCenterIds?.length || 0} centro(s) asignado(s)
                       </span>
@@ -133,17 +136,17 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
           </div>
 
           {/* Right Panel - Cost Centers Management */}
-          <div className="w-1/2 flex flex-col">
+          <div className="flex w-full flex-col md:w-1/2">
             {!selectedEmployee ? (
-              <div className="flex flex-1 items-center justify-center text-center p-8">
+              <div className="flex flex-1 items-center justify-center p-4 text-center sm:p-8">
                 <div>
-                  <Building2 className="h-16 w-16 mx-auto mb-4 text-muted/40" />
-                  <p className="text-muted">Seleccione un empleado para ver sus centros de costo</p>
+                  <Building2 className="mx-auto mb-4 h-12 w-12 text-muted/40 sm:h-16 sm:w-16" />
+                  <p className="text-sm text-muted sm:text-base">Seleccione un empleado para ver sus centros de costo</p>
                 </div>
               </div>
             ) : (
               <>
-                <div className="border-b border-border bg-gray-50 px-4 py-3">
+                <div className="border-b border-border bg-gray-50 px-3 py-2 sm:px-4 sm:py-3">
                   <h3 className="font-semibold text-secondary">
                     {selectedEmployee.name} {selectedEmployee.lastname}
                   </h3>
@@ -151,7 +154,7 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
                 </div>
 
                 {/* Assigned Cost Centers */}
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-4">
                   <h4 className="mb-3 text-sm font-semibold text-secondary">Centros de Costo Asignados</h4>
 
                   {loadingEmployeeCostCenters ? (
@@ -159,7 +162,7 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
                       <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     </div>
                   ) : employeeCostCenters.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border bg-gray-50 p-6 text-center">
+                    <div className="rounded-lg border border-dashed border-border bg-gray-50 p-4 text-center sm:p-6">
                       <p className="text-sm text-muted">No hay centros de costo asignados</p>
                     </div>
                   ) : (
@@ -167,22 +170,22 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
                       {employeeCostCenters.map((costCenter) => (
                         <div
                           key={costCenter.id}
-                          className="flex items-center justify-between rounded-lg border border-border bg-white p-3 shadow-sm"
+                          className="flex items-center justify-between rounded-lg border border-border bg-white p-2.5 shadow-sm sm:p-3"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                              <Building2 className="h-5 w-5 text-primary" />
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 sm:h-10 sm:w-10">
+                              <Building2 className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
                             </div>
                             <div>
-                              <p className="font-semibold text-secondary">{costCenter.name}</p>
+                              <p className="text-sm font-semibold text-secondary sm:text-base">{costCenter.name}</p>
                             </div>
                           </div>
                           <button
                             onClick={() => handleRemove(costCenter.id)}
                             disabled={isProcessing}
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-red-600 transition hover:bg-red-50 disabled:opacity-50 sm:h-8 sm:w-8"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           </button>
                         </div>
                       ))}
@@ -190,9 +193,9 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
                   )}
 
                   {/* Assign New Cost Center */}
-                  <div className="mt-6">
+                  <div className="mt-4 sm:mt-6">
                     <h4 className="mb-3 text-sm font-semibold text-secondary">Asignar Nuevo Centro de Costo</h4>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <select
                         value={selectedCostCenterId}
                         onChange={(e) => setSelectedCostCenterId(e.target.value)}
@@ -209,7 +212,7 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
                       <button
                         onClick={handleAssign}
                         disabled={!selectedCostCenterId || isProcessing}
-                        className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                       >
                         {isProcessing ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -229,15 +232,16 @@ export default function EmployeeManagementModal({ isOpen, onClose }: EmployeeMan
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-border px-4 py-3 sm:px-6 sm:py-4">
           <button
             onClick={onClose}
-            className="rounded-lg border border-border bg-white px-6 py-2 font-semibold text-secondary hover:bg-gray-50 transition"
+            className="w-full rounded-lg border border-border bg-white px-6 py-2 font-semibold text-secondary transition hover:bg-gray-50 sm:w-auto"
           >
             Cerrar
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

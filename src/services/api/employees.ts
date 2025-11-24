@@ -29,19 +29,22 @@ export type EmployeeCostCenters = {
 const baseUrl = "/inventory/cost-center-employees";
 
 /**
- * Obtener todos los empleados
- * Por ahora, obtenemos el empleado actual del auth
- * Si el backend tiene un endpoint para listar empleados, actualizar aquí
+ * Obtener todos los empleados desde el endpoint /employees
  */
 export async function getAllEmployees(): Promise<Employee[]> {
-  // Temporal: devolver empleado actual del localStorage
-  const userStr = localStorage.getItem('auth_user');
-  if (!userStr) return [];
-  
   try {
-    const employee = JSON.parse(userStr) as Employee;
-    return [employee];
-  } catch {
+    const { data } = await api.get<Employee[]>('/employees');
+    
+    // Asegurar que es un array y que costCenterIds existe en cada empleado
+    const employees = Array.isArray(data) ? data : [];
+    return employees.map(emp => ({
+      ...emp,
+      costCenterIds: emp.costCenterIds || []
+    }));
+  } catch (error: any) {
+    console.error('Error fetching employees:', error);
+    // Si el endpoint falla, retornar array vacío
+    // No mostrar toast de error aquí, se maneja en el componente
     return [];
   }
 }
