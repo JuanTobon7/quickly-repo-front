@@ -31,8 +31,8 @@ export function useProducts(params: ProductQueryParams & { keyWord?: string }) {
       placeholderData: (prev) => prev,
     });
 
-  const products = data?.content ?? [];
-
+  const products= data?.content ?? [];
+  const totalElements = data?.totalElements ?? 0;
   // --- CREATE ---
   const create = useMutation({
     mutationFn: (payload: ProductCreatePayload) => createProduct(payload),

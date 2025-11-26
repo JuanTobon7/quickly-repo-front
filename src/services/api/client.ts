@@ -70,7 +70,7 @@ if (!baseURL && import.meta.env.MODE === "development") {
 const api = axios.create({
   baseURL: baseURL || "https://viddefe.com/api/v1",
   // NO configurar Content-Type por defecto - axios lo detectará automáticamente
-  // (application/json para objetos, multipart/form-data para FormData, etc.)
+  // (application/json para objetos, multipart/form-data para FormData, etc.)
 });
 
 // ---------------------------------------------------------

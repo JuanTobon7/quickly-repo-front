@@ -73,7 +73,8 @@ export type ProductSummary = {
   name: string
   quantity: number
   cost: number
-  priceSale: number
+  priceSale: number,
+  brand: string
 }
 
 const baseUrl = "/inventory/products"

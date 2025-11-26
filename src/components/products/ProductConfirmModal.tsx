@@ -7,7 +7,7 @@ interface Props {
   open: boolean;
   product: Product;
   onClose: () => void;
-  onConfirm: (qty: number) => void;
+  onConfirm: (qty: number, selectedPrice: number) => void;
   existence: number;
 }
 
@@ -38,6 +38,7 @@ export default function ProductConfirmModal({
   const [qty, setQty] = useState<number>(1);
   const [images, setImages] = useState<ProductImage[] | null>(null);
   const [mainImg, setMainImg] = useState<ProductImage | null>(null);
+  const [selectedPriceLevel, setSelectedPriceLevel] = useState<number>(2); // Por defecto el nivel 3 (índice 2)
 
   // Fetch imágenes
   useEffect(() => {
@@ -127,6 +128,7 @@ export default function ProductConfirmModal({
           <InfoBlock label="UBICACIÓN" value="Estan 2" />
           <InfoBlock label="REFERENCIA" value={product.reference} />
           <InfoBlock label="CÓDIGO DE BARRAS" value={product.barCode} />
+          <InfoBlock label="MARCA" value={product.brand.name} />
         </div>
 
         {/* IMAGE */}
@@ -154,11 +156,17 @@ export default function ProductConfirmModal({
 
           <div className="flex flex-col gap-3 max-h-[280px] overflow-y-auto pr-2">
             {product.priceLevels?.map((pl, idx) => (
-              <div
+              <button
                 key={idx}
-                className="bg-gray-100 px-4 py-3 rounded-lg border border-gray-200 flex justify-between gap-4 items-center text-gray-700 flex-shrink-0"
+                type="button"
+                onClick={() => setSelectedPriceLevel(idx)}
+                className={`px-4 py-3 rounded-lg border-2 flex justify-between gap-4 items-center transition-all cursor-pointer flex-shrink-0 ${
+                  selectedPriceLevel === idx
+                    ? 'bg-primary text-white border-primary shadow-md'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:border-primary/40 hover:bg-gray-50'
+                }`}
               >
-                <span className="font-semibold text-sm opacity-70">
+                <span className={`font-semibold text-sm ${selectedPriceLevel === idx ? 'opacity-100' : 'opacity-70'}`}>
                   ({idx + 1})
                 </span>
 
@@ -169,7 +177,7 @@ export default function ProductConfirmModal({
                 <span className="font-semibold">
                   ${calculatePrices(product.priceAfterTaxes, pl.profitPercentage).toLocaleString()}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -213,7 +221,7 @@ export default function ProductConfirmModal({
           <div className="bg-primary px-4 py-3 rounded-lg border border-primary max-h-[90px] overflow-y-auto">
             <label className="text-xs font-medium text-white block mb-1">SUB TOTAL</label>
             <div className="text-xl font-bold text-white text-center">
-              ${(calculatePrices(product.priceAfterTaxes, product.priceLevels?.[2]?.profitPercentage || 0) * qty).toLocaleString()}
+              ${(calculatePrices(product.priceAfterTaxes, product.priceLevels?.[selectedPriceLevel]?.profitPercentage || 0) * qty).toLocaleString()}
             </div>
           </div>
         </div>
@@ -229,7 +237,10 @@ export default function ProductConfirmModal({
         </button>
 
         <button
-          onClick={() => onConfirm(qty)}
+          onClick={() => {
+            const selectedPrice = calculatePrices(product.priceAfterTaxes, product.priceLevels?.[selectedPriceLevel]?.profitPercentage || 0);
+            onConfirm(qty, selectedPrice);
+          }}
           className="px-8 py-3 rounded-lg bg-primary hover:bg-primary/90 text-white font-semibold text-lg transition"
         >
           ADICIONAR

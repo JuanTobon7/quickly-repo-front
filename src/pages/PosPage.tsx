@@ -107,7 +107,7 @@ const PosPage = () => {
   },[pageableRequest, debouncedSearchInput])
 
   // Fetch products
-  const { products, isLoading, totalPages } = useProducts(params);
+  const { products, isLoading, totalPages, totalElements, currentPage } = useProducts(params);
   const [productsBank, setProductsBank] = useState<ProductSummary[]>([])
 
   useEffect(() => {
@@ -138,8 +138,8 @@ const PosPage = () => {
     setCtrlModalProduct(false)
   }
 
-  const handleAddProduct = (delta = 0) => {
-    handleUpdateQuantity(temporalProduct.id, delta);
+  const handleAddProduct = (delta = 0, selectedPrice?: number) => {
+    handleUpdateQuantity(temporalProduct.id, delta, selectedPrice);
 
     toast.success(`Producto agregado: ${temporalProduct.name}`);
     setTemporalProduct(null);
@@ -147,7 +147,7 @@ const PosPage = () => {
 
 
 
-  const handleUpdateQuantity = (productId: string, delta: number) => {
+  const handleUpdateQuantity = (productId: string, delta: number, selectedPrice?: number) => {
   const product = productsBank.find(p => p.id === productId);
   if (!product) return;
 
@@ -165,7 +165,7 @@ const PosPage = () => {
       return;
     }
 
-    const unitPrice = product.cost;
+    const unitPrice = selectedPrice || temporalProduct.priceAfterTaxes;
 
     // crear linea en la factura
     setInvoiceItems(prev => [
@@ -174,7 +174,7 @@ const PosPage = () => {
           product: temporalProduct,
           quantity: delta,
           unitPrice,
-          total: (delta) * temporalProduct.priceAfterTaxes
+          total: (delta) * unitPrice
         }
       ]);
     // descontar stock
@@ -313,11 +313,11 @@ const PosPage = () => {
           ),
         },
         {
-          header: "Costo",
-          accessorKey: "cost",
+          header: "Marca",
+          accessorKey: "brand",
           cell: (info) => (
             <span className="text-secondary">
-              {formatCurrency(info.getValue<number>())}
+              {info.getValue<string>()}
             </span>
           ),
         },
@@ -403,10 +403,10 @@ const PosPage = () => {
               <div className="flex-1 bg-white rounded-xl border border-border/60 shadow-sm overflow-hidden flex flex-col">
                 <div className="px-4 py-2 bg-gray-50 border-b border-border/60 flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-secondary">
-                    Productos Disponibles
+                    Productos encontrados {totalElements}
                   </h3>
                   <span className="text-xs text-muted">
-                    Mostrando del 1 al 20 de {products.length} Registros
+                    Mostrando pagina {currentPage + 1} de {totalPages} paginas
                   </span>
                 </div>
                 
@@ -531,7 +531,7 @@ const PosPage = () => {
                             </div>
                             <div className="col-span-2 text-right">
                               <p className="text-secondary font-bold text-xs">
-                                {formatCurrency(item.product.priceAfterTaxes).replace(/\s/g, '').replace('$', '$ ')}
+                                {formatCurrency(item.unitPrice).replace(/\s/g, '').replace('$', '$ ')}
                               </p>
                               <p className="text-[10px] text-green-600 font-medium">
                                 {item.product.taxes.name + " "+ item.product.taxes.rate*100 +"%"}
