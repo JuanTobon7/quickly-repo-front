@@ -95,6 +95,8 @@ const PosPage = () => {
   
   // Nuevo estado para el índice del item enfocado
   const [focusedInvoiceIndex, setFocusedInvoiceIndex] = useState<number>(0);
+  // Estado para el buffer de entrada numérica
+  const [numberBuffer, setNumberBuffer] = useState<string>('');
   
   const debouncedSearchInput = useDebounce(searchTerm, 300);
   const [params, setParams] = useState<ProductQueryParams>({
@@ -130,6 +132,41 @@ const PosPage = () => {
       searchRef.current.select(); // Selecciona todo el texto para facilitar reemplazo
     }
   }, [level]);
+
+  // Efecto para limpiar el buffer numérico cuando cambia el foco
+  useEffect(() => {
+    if (level !== "parent") {
+      setNumberBuffer('');
+    }
+  }, [level, focusedInvoiceIndex]);
+
+  // Función para procesar entrada numérica
+  const processNumberInput = (key: string) => {
+    if (level === "parent" && invoiceItems.length > 0 && focusedInvoiceIndex >= 0) {
+      const currentItem = invoiceItems[focusedInvoiceIndex];
+      if (!currentItem) return;
+
+      let newBuffer = numberBuffer + key;
+      
+      // Limitar a 4 dígitos máximo
+      if (newBuffer.length > 4) {
+        newBuffer = newBuffer.slice(-4);
+      }
+
+      setNumberBuffer(newBuffer);
+
+      // Si el buffer tiene al menos 1 dígito, actualizar la cantidad
+      if (newBuffer.length >= 1) {
+        const newQuantity = parseInt(newBuffer, 10);
+        if (!isNaN(newQuantity) && newQuantity > 0) {
+          const delta = newQuantity - currentItem.quantity;
+          if (delta !== 0) {
+            handleUpdateQuantity(currentItem.product.id, delta);
+          }
+        }
+      }
+    }
+  };
 
   // Efecto para manejar navegación con teclado en invoiceItems
   useEffect(() => {
@@ -168,8 +205,50 @@ const PosPage = () => {
         return;
       }
 
-      // Solo procesar teclas + y - si estamos en nivel parent y hay items
+      // Solo procesar teclas si estamos en nivel parent y hay items
       if (level === "parent" && invoiceItems.length > 0) {
+        // Teclas numéricas (0-9) para actualización directa
+        if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          processNumberInput(e.key);
+          return;
+        }
+
+        // Backspace para borrar el buffer
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          if (numberBuffer.length > 0) {
+            const newBuffer = numberBuffer.slice(0, -1);
+            setNumberBuffer(newBuffer);
+            
+            if (newBuffer.length > 0) {
+              const currentItem = invoiceItems[focusedInvoiceIndex];
+              const newQuantity = parseInt(newBuffer, 10);
+              if (!isNaN(newQuantity) && newQuantity > 0) {
+                const delta = newQuantity - currentItem.quantity;
+                if (delta !== 0) {
+                  handleUpdateQuantity(currentItem.product.id, delta);
+                }
+              }
+            } else {
+              // Si el buffer está vacío, volver a cantidad 1
+              const currentItem = invoiceItems[focusedInvoiceIndex];
+              const delta = 1 - currentItem.quantity;
+              if (delta !== 0) {
+                handleUpdateQuantity(currentItem.product.id, delta);
+              }
+            }
+          }
+          return;
+        }
+
+        // Escape para limpiar buffer
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setNumberBuffer('');
+          return;
+        }
+
         // Tecla + para incrementar
         if (e.key === "+" || e.key === "Add") {
           e.preventDefault();
@@ -200,7 +279,9 @@ const PosPage = () => {
             prev > 0 ? prev - 1 : invoiceItems.length - 1
           );
         }
-        if(e.key === "Enter"){
+
+        // Enter para facturar
+        if (e.key === "Enter") {
           e.preventDefault();
           handleProcessInvoice();
         }
@@ -209,7 +290,7 @@ const PosPage = () => {
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [level, invoiceItems, focusedInvoiceIndex]);
+  }, [level, invoiceItems, focusedInvoiceIndex, numberBuffer]);
 
   // Manejar el blur del input de búsqueda para volver al datatable
   const handleSearchBlur = () => {
@@ -228,7 +309,7 @@ const PosPage = () => {
     if (invoiceItems.length > 0 && level === "parent") {
       // Iniciar navegación desde el primer elemento
       setFocusedInvoiceIndex(0);
-      toast.info(`Navegación activada. Producto ${invoiceItems[0].product.name} seleccionado. Use ↑/↓ para navegar y +/- para modificar cantidades.`);
+      toast.info(`Navegación activada. Producto ${invoiceItems[0].product.name} seleccionado. Use ↑/↓ para navegar, +/- para modificar cantidades y teclas numéricas para cantidades directas.`);
     }
   };
 
@@ -376,6 +457,7 @@ const PosPage = () => {
   const handleClearInvoice = () => {
     setInvoiceItems([]);
     setFocusedInvoiceIndex(0);
+    setNumberBuffer('');
     toast.info('Factura anulada');
   };
 
@@ -719,6 +801,11 @@ const PosPage = () => {
                     {focusedInvoiceIndex >= 0 && (
                       <span className="text-blue-600 font-semibold">
                         Producto seleccionado: {focusedInvoiceIndex + 1}/{invoiceItems.length}
+                        {numberBuffer && (
+                          <span className="ml-2 text-orange-600">
+                            Entrada: {numberBuffer}
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>
