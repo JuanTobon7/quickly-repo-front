@@ -19,6 +19,7 @@ export const driverConfig: Config = {
   stagePadding: 14,
   stageRadius: 8,
   disableActiveInteraction: false,
+  allowKeyboardControl: false
 };
 
 // Pasos del tour de Inventario

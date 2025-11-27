@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Search, User, DollarSign, FileText, CreditCard, Receipt, X, Plus, Minus, Printer, Users, LockKeyhole, FileSpreadsheet, PenLine, BookOpen } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { Search, User, DollarSign, FileText, CreditCard, Receipt, X, Plus, Minus, Printer, Users, LockKeyhole, FileSpreadsheet, PenLine, BookOpen, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProducts } from '@/hooks/inventory/useProduct';
 import { getProductById, type Product, type ProductQueryParams, type ProductSummary } from '@/services/api/products';
@@ -8,6 +8,8 @@ import DataTable from '@/components/ui/DataTable';
 import { PageableRequest } from '@/services/api/client';
 import { useDebounce } from '@/hooks/useDebounce';
 import ProductConfirmModal from '@/components/products/ProductConfirmModal';
+import { useKeyboardLevel } from '@/hooks/useKeyBoard';
+import { startPosPageTour } from '@/config/posTour';
 
 type InvoiceItem = {
   product: Product;
@@ -19,17 +21,15 @@ type InvoiceItem = {
 const formatCurrency = (value: number) =>
   value.toLocaleString('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
-function InvoiceItemRow({ item, handleUpdateQuantity }) {
+function InvoiceItemRow({ item, handleUpdateQuantity, isFocused = false }) {
   const [editValue, setEditValue] = useState(item.quantity);
 
   useEffect(() => {
-    // si la cantidad cambia desde afuera → sincroniza
     setEditValue(item.quantity);
   }, [item.quantity]);
 
   return (
-    <div className="flex items-center gap-2">
-
+    <div className={`flex items-center gap-2 ${isFocused ? 'bg-blue-100 rounded p-1' : ''}`}>
       <button
         onClick={() => handleUpdateQuantity(item.product.id, -1)}
         className="p-1 hover:bg-red-100 rounded transition"
@@ -78,37 +78,44 @@ function InvoiceItemRow({ item, handleUpdateQuantity }) {
   );
 }
 
-
+const pageSizeOptions: number[] = [20];
 
 const PosPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [pageableRequest, setPageableRequest] = useState<PageableRequest>();
   const [temporalProduct, setTemporalProduct] = useState<Product>(null);
-  const [temporalSummary, setTemporalSummary] = useState<ProductSummary>(null)
-  const [ctrlModalProduct, setCtrlModalProduct] = useState<boolean>(false)
+  const [temporalSummary, setTemporalSummary] = useState<ProductSummary>(null);
+  const [ctrlModalProduct, setCtrlModalProduct] = useState<boolean>(false);
   const [selectedClient, setSelectedClient] = useState({
     name: 'JULIAN GUILLEN CUBILLOS',
     nit: '93297332',
     seller: 'YEISON OSORIO'
   });
-  const debouncedSearchInput = useDebounce(searchTerm,300)
+  
+  // Nuevo estado para el índice del item enfocado
+  const [focusedInvoiceIndex, setFocusedInvoiceIndex] = useState<number>(0);
+  
+  const debouncedSearchInput = useDebounce(searchTerm, 300);
   const [params, setParams] = useState<ProductQueryParams>({
     pageableRequest: pageableRequest,
-    keyWord: debouncedSearchInput  // <--- solo la palabra clave necesaria
-  })
+    keyWord: debouncedSearchInput
+  });
 
-  
-  useEffect(()=>{
+  const { products, isLoading, totalPages, totalElements, currentPage } = useProducts(params);
+  const [productsBank, setProductsBank] = useState<ProductSummary[]>([]);
+
+  // Modificamos el hook useKeyboardLevel para manejar el nivel "search"
+  const { level, setLevel } = useKeyboardLevel("datatable");
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const invoiceContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
     setParams({
       pageableRequest: pageableRequest,
       keyWord: debouncedSearchInput
-    })
-  },[pageableRequest, debouncedSearchInput])
-
-  // Fetch products
-  const { products, isLoading, totalPages, totalElements, currentPage } = useProducts(params);
-  const [productsBank, setProductsBank] = useState<ProductSummary[]>([])
+    });
+  }, [pageableRequest, debouncedSearchInput]);
 
   useEffect(() => {
     if (products.length > 0) {
@@ -116,152 +123,259 @@ const PosPage = () => {
     }
   }, [products]);
 
+  // Efecto para manejar el foco automático cuando cambiamos al nivel "search"
+  useEffect(() => {
+    if (level === "search" && searchRef.current) {
+      searchRef.current.focus();
+      searchRef.current.select(); // Selecciona todo el texto para facilitar reemplazo
+    }
+  }, [level]);
 
-  // Calculate totals
+  // Efecto para manejar navegación con teclado en invoiceItems
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Ctrl + Enter - toggle modo búsqueda
+      if (e.key === "Enter" && e.ctrlKey) {
+        e.preventDefault();
+        if (level === "search") {
+          // Si ya estamos en modo búsqueda, volver al datatable
+          setLevel("datatable");
+        } else {
+          // Si no estamos en modo búsqueda, activarlo
+          setLevel("search");
+        }
+      }
+      
+      // Navegación entre secciones
+      if (e.key === "ArrowLeft" && e.ctrlKey) {
+        e.preventDefault();
+        setLevel("datatable");
+        setFocusedInvoiceIndex(-1);
+      }
+      if (e.key === "ArrowRight" && e.ctrlKey) {
+        e.preventDefault();
+        setLevel("parent");
+        setFocusedInvoiceIndex(0);
+      }
+
+      // Si estamos en modo búsqueda, no procesar otras teclas de navegación
+      if (level === "search") {
+        // Permitir Escape para salir del modo búsqueda
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setLevel("datatable");
+        }
+        return;
+      }
+
+      // Solo procesar teclas + y - si estamos en nivel parent y hay items
+      if (level === "parent" && invoiceItems.length > 0) {
+        // Tecla + para incrementar
+        if (e.key === "+" || e.key === "Add") {
+          e.preventDefault();
+          if (focusedInvoiceIndex >= 0 && focusedInvoiceIndex < invoiceItems.length) {
+            handleUpdateQuantity(invoiceItems[focusedInvoiceIndex].product.id, 1);
+          }
+        }
+        
+        // Tecla - para decrementar
+        if (e.key === "-" || e.key === "Subtract") {
+          e.preventDefault();
+          if (focusedInvoiceIndex >= 0 && focusedInvoiceIndex < invoiceItems.length) {
+            handleUpdateQuantity(invoiceItems[focusedInvoiceIndex].product.id, -1);
+          }
+        }
+
+        // Navegación con flechas arriba/abajo entre invoice items
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setFocusedInvoiceIndex(prev => 
+            prev < invoiceItems.length - 1 ? prev + 1 : 0
+          );
+        }
+        
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setFocusedInvoiceIndex(prev => 
+            prev > 0 ? prev - 1 : invoiceItems.length - 1
+          );
+        }
+        if(e.key === "Enter"){
+          e.preventDefault();
+          handleProcessInvoice();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [level, invoiceItems, focusedInvoiceIndex]);
+
+  // Manejar el blur del input de búsqueda para volver al datatable
+  const handleSearchBlur = () => {
+    if (level === "search") {
+      // Pequeño delay para evitar conflictos con otros eventos
+      setTimeout(() => {
+        setLevel("datatable");
+      }, 100);
+    }
+  };
+
+  // Manejar click derecho para iniciar navegación
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    if (invoiceItems.length > 0 && level === "parent") {
+      // Iniciar navegación desde el primer elemento
+      setFocusedInvoiceIndex(0);
+      toast.info(`Navegación activada. Producto ${invoiceItems[0].product.name} seleccionado. Use ↑/↓ para navegar y +/- para modificar cantidades.`);
+    }
+  };
+
+  // Calcular totals
   const invoiceTotal = useMemo(() => {
     return invoiceItems.reduce((sum, item) => sum + item.total, 0);
   }, [invoiceItems]);
 
-  const openModal = async(productSummary: ProductSummary)=>{
-    if(productSummary.quantity <= 0){
-      toast.error(`El producto ${productSummary.name} no presenta suficiente stock para vender`)
-      return
-    }
-    const product = await getProductById(productSummary.id)
-    setTemporalProduct(product)
-    setCtrlModalProduct(true)
-    setTemporalSummary(productSummary)
-  }
+  const openModal = async (productSummary: ProductSummary) => {
+    const product = await getProductById(productSummary.id);
+    setTemporalProduct(product);
+    setCtrlModalProduct(true);
+    setTemporalSummary(productSummary);
+    setLevel("modal");
+    setFocusedInvoiceIndex(0);
+  };
 
-  const closeModal = ()=>{
-    setTemporalProduct(null)
-    setCtrlModalProduct(false)
-  }
+  const closeModal = () => {
+    setTemporalProduct(null);
+    setCtrlModalProduct(false);
+    setLevel("datatable") 
+  };
 
   const handleAddProduct = (delta = 0, selectedPrice?: number) => {
     handleUpdateQuantity(temporalProduct.id, delta, selectedPrice);
-
-    toast.success(`Producto agregado: ${temporalProduct.name}`);
     setTemporalProduct(null);
+    setFocusedInvoiceIndex(0);
   };
 
-
-
   const handleUpdateQuantity = (productId: string, delta: number, selectedPrice?: number) => {
-  const product = productsBank.find(p => p.id === productId);
-  if (!product) return;
+    const product = productsBank.find(p => p.id === productId);
+    if (!product) return;
 
-  const invoiceItem = invoiceItems.find(i => i.product.id === productId);
+    const invoiceItem = invoiceItems.find(i => i.product.id === productId);
+    const currentIndex = invoiceItems.findIndex(i => i.product.id === productId);
 
-  // ----------------------------
-  // A) SI EL ITEM NO EXISTE → CREARLO
-  // ----------------------------
-  if (!invoiceItem) {
-    if (delta <= 0) return; // no puedes crear con cantidades negativas
+    // Si el item no existe → crearlo
+    if (!invoiceItem) {
+      if (delta <= 0) return;
 
-    // validar stock
-    if (product.quantity < delta) {
-      toast.error("Sale quantity exceeds available stock");
-      return;
-    }
+      if (product.quantity < delta) {
+        toast.error("Stock insuficiente");
+        return;
+      }
 
-    const unitPrice = selectedPrice || temporalProduct.priceAfterTaxes;
+      const unitPrice = selectedPrice || temporalProduct.priceAfterTaxes;
 
-    // crear linea en la factura
-    setInvoiceItems(prev => [
+      setInvoiceItems(prev => [
         ...prev,
         {
           product: temporalProduct,
           quantity: delta,
           unitPrice,
-          total: (delta) * unitPrice
+          total: delta * unitPrice
         }
       ]);
-    // descontar stock
+      
+      setProductsBank(prev =>
+        prev.map(item =>
+          item.id === productId
+            ? { ...item, quantity: item.quantity - delta }
+            : item
+        )
+      );
+      
+      // Enfocar el nuevo item agregado
+      setFocusedInvoiceIndex(invoiceItems.length);
+      toast.success('Producto Agregado');
+      return;
+    }
+
+    // Si ya existe → actualizarlo
+    const newQty = invoiceItem.quantity + delta;
+    const newStock = product.quantity - delta;
+
+    // Si la nueva cantidad es 0 → eliminar item
+    if (newQty <= 0) {
+      setProductsBank(prev =>
+        prev.map(item =>
+          item.id === productId
+            ? { ...item, quantity: item.quantity + invoiceItem.quantity }
+            : item
+        )
+      );
+
+      setInvoiceItems(prev =>
+        prev.filter(i => i.product.id !== productId)
+      );
+
+      // Ajustar el índice enfocado después de eliminar
+      if (focusedInvoiceIndex >= currentIndex) {
+        setFocusedInvoiceIndex(prev => 
+          prev > 0 ? prev - 1 : invoiceItems.length - 2 >= 0 ? 0 : -1
+        );
+      }
+      return;
+    }
+
+    // Validar stock si delta es positivo
+    if (delta > 0 && newStock < 0) {
+      toast.error("Stock insuficiente");
+      return;
+    }
+
+    // Actualizar stock
     setProductsBank(prev =>
       prev.map(item =>
         item.id === productId
-          ? { ...item, quantity: item.quantity - delta }
+          ? { ...item, quantity: newStock }
           : item
       )
     );
 
-    return;
-  }
-
-  // ----------------------------
-  // B) SI YA EXISTE → ACTUALIZARLO
-  // ----------------------------
-  const newQty = invoiceItem.quantity + delta;
-  const newStock = product.quantity - delta;
-
-  // ----------------------------
-  // B1) Si la nueva cantidad es 0 → eliminar item y devolver stock
-  // ----------------------------
-  if (newQty <= 0) {
-    // devolver stock completo que ese item tenía
-    setProductsBank(prev =>
-      prev.map(item =>
-        item.id === productId
-          ? { ...item, quantity: item.quantity + invoiceItem.quantity }
-          : item
-      )
-    );
-
-    // eliminar item del invoice
+    // Actualizar item del invoice
     setInvoiceItems(prev =>
-      prev.filter(i => i.product.id !== productId)
+      prev.map(i =>
+        i.product.id === productId
+          ? {
+              ...i,
+              quantity: newQty,
+              total: newQty * i.unitPrice
+            }
+          : i
+      )
     );
-
-    return;
-  }
-
-  // ----------------------------
-  // B2) Validar stock si delta es positivo
-  // ----------------------------
-  if (delta > 0 && newStock < 0) {
-    toast.error("Sale quantity exceeds available stock");
-    return;
-  }
-
-  // ----------------------------
-  // B3) Actualizar stock
-  // ----------------------------
-  setProductsBank(prev =>
-    prev.map(item =>
-      item.id === productId
-        ? { ...item, quantity: newStock }
-        : item
-    )
-  );
-
-  // ----------------------------
-  // B4) Actualizar item del invoice
-  // ----------------------------
-  setInvoiceItems(prev =>
-    prev.map(i =>
-      i.product.id === productId
-        ? {
-            ...i,
-            quantity: newQty,
-            total: newQty * i.product.priceAfterTaxes
-          }
-        : i
-    )
-  );
-};
-
-
+  };
 
   const handleRemoveItem = (productId: string) => {
-    const productInvoice = invoiceItems.find((item)=> item.product.id == productId)
-    handleUpdateQuantity(productInvoice.product.id, -productInvoice.quantity)
+    const productInvoice = invoiceItems.find((item) => item.product.id == productId);
+    const currentIndex = invoiceItems.findIndex(i => i.product.id === productId);
+    
+    handleUpdateQuantity(productInvoice.product.id, -productInvoice.quantity);
     setInvoiceItems(items => items.filter(item => item.product.id !== productId));
+    
+    // Ajustar el índice enfocado después de eliminar
+    if (focusedInvoiceIndex >= currentIndex) {
+      setFocusedInvoiceIndex(prev => 
+        prev > 0 ? prev - 1 : invoiceItems.length - 2 >= 0 ? 0 : -1
+      );
+    }
+    
     toast.info('Producto eliminado');
   };
 
   const handleClearInvoice = () => {
     setInvoiceItems([]);
+    setFocusedInvoiceIndex(0);
     toast.info('Factura anulada');
   };
 
@@ -271,84 +385,95 @@ const PosPage = () => {
       return;
     }
     toast.success('Procesando factura...');
-    // Aquí iría la lógica de facturación
   };
 
   const columns = useMemo<ColumnDef<ProductSummary>[]>(
-      () => [
-        {
-          header: "Código",
-          accessorKey: "code",
-          cell: (info) => (
-            <span className="font-medium text-secondary">
-              {info.getValue<string>()}
-            </span>
-          ),
-        },
-        {
-          header: "Referencia",
-          accessorKey: "reference",
-          cell: (info) => (
-            <span className="text-secondary text-sm">
-              {info.getValue<string>()}
-            </span>
-          ),
-        },
-        {
-          header: "Nombre",
-          accessorKey: "name",
-          cell: (info) => (
-            <span className="font-medium text-secondary">
-              {info.getValue<string>()}
-            </span>
-          ),
-        },
-        {
-          header: "Cantidad",
-          accessorKey: "quantity",
-          cell: (info) => (
-            <span className="text-secondary font-mono">
-              {info.getValue<number>()}
-            </span>
-          ),
-        },
-        {
-          header: "Marca",
-          accessorKey: "brand",
-          cell: (info) => (
-            <span className="text-secondary">
-              {info.getValue<string>()}
-            </span>
-          ),
-        },
-        {
-          header: "Precio Venta",
-          accessorKey: "priceSale",
-          cell: (info) => (
-            <span className="text-secondary">
-              {formatCurrency(info.getValue<number>())}
-            </span>
-          ),
-        },
-      ],
-      []
-    )
+    () => [
+      {
+        header: "Código",
+        accessorKey: "code",
+        cell: (info) => (
+          <span className="font-medium text-secondary">
+            {info.getValue<string>()}
+          </span>
+        ),
+      },
+      {
+        header: "Imagen",
+        accessorKey: "image",
+        cell: (info) => (
+          <img 
+            src={info.getValue<string>() || 'https://elmayoristacolombia.com/tienda/imagenes/aceite.jpg'} 
+            className='object-contain max-w-16'
+          />
+        ),
+      },
+      {
+        header: "Referencia",
+        accessorKey: "reference",
+        cell: (info) => (
+          <span className="text-secondary text-sm">
+            {info.getValue<string>()}
+          </span>
+        ),
+      },
+      {
+        header: "Nombre",
+        accessorKey: "name",
+        cell: (info) => (
+          <span className="font-medium text-secondary">
+            {info.getValue<string>()}
+          </span>
+        ),
+      },
+      {
+        header: "Cantidad",
+        accessorKey: "quantity",
+        cell: (info) => (
+          <span className="text-secondary font-mono">
+            {info.getValue<number>()}
+          </span>
+        ),
+      },
+      {
+        header: "Precio Venta",
+        accessorKey: "priceSale",
+        cell: (info) => (
+          <span className="text-secondary">
+            {formatCurrency(info.getValue<number>())}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
 
   return (
     <>
       <div className="flex h-screen bg-background">
         <div className="flex-1 flex flex-col">
-          <header className="bg-white border-b border-border/60 px-6 py-3">
+          <header className="bg-white border-b border-border/60 px-6 py-3 pos-page">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted uppercase tracking-wide">EMPRESA AUTORIZADA: EL MAYORISTA SAS</p>
-                <h1 className="text-xl font-bold text-primary">Módulo: PUNTO DE VENTA</h1>
+              <div className='flex items-end justify-between gap-4'>
+                <div>                  
+                  <p className="text-xs text-muted uppercase tracking-wide">EMPRESA AUTORIZADA: EL MAYORISTA SAS</p>
+                  <h1 className="text-xl font-bold text-primary">Módulo: PUNTO DE VENTA</h1>
+                </div>
+                <button
+                    type="button"
+                    onClick={startPosPageTour}
+                    className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-100 hover:shadow-md self-start md:self-auto"
+                    title="Iniciar tutorial"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    <span>Ayuda</span>
+                  </button>
               </div>
               <div className="flex items-center gap-3">
                 <a
-                className='group rounded-3xl border px-2 py-1 font-semibold transition flex items-center gap-2 border-transparent text-sm text-secondary hover:text-primary'
-                target="_blank"
-                href='https://docs-mayorista.vercel.app/'>
+                  className='group rounded-3xl border px-2 py-1 font-semibold transition flex items-center gap-2 border-transparent text-sm text-secondary hover:text-primary'
+                  target="_blank"
+                  href='https://docs-mayorista.vercel.app/'>
                   <BookOpen className='text-primary h-5 w-5'/>
                   Manual de Usuario
                 </a>
@@ -389,15 +514,28 @@ const PosPage = () => {
                 </button>
               </div>
 
-              <div className="relative">
+              <div className="relative search-element">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted" />
                 <input
                   type="text"
+                  ref={searchRef}
                   placeholder="Buscar productos por nombre, código o código de barras..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 text-secondary placeholder:text-muted shadow-sm"
+                  onBlur={handleSearchBlur}
+                  className={`w-full pl-12 pr-4 py-3 bg-white border rounded-xl focus:outline-none focus:ring-2 text-secondary placeholder:text-muted shadow-sm transition-all ${
+                    level === "search" 
+                      ? "border-primary ring-2 ring-primary/40 bg-blue-50" 
+                      : "border-border/40 focus:ring-primary/40"
+                  }`}
                 />
+                {level === "search" && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <span className="text-xs bg-primary text-white px-2 py-1 rounded-md font-semibold">
+                      MODO BÚSQUEDA
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 bg-white rounded-xl border border-border/60 shadow-sm overflow-hidden flex flex-col">
@@ -405,9 +543,16 @@ const PosPage = () => {
                   <h3 className="text-sm font-semibold text-secondary">
                     Productos encontrados {totalElements}
                   </h3>
-                  <span className="text-xs text-muted">
-                    Mostrando pagina {currentPage + 1} de {totalPages} paginas
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted">
+                      Mostrando pagina {currentPage + 1} de {totalPages} paginas
+                    </span>
+                    {level === "search" && (
+                      <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded-md font-semibold">
+                        CTRL+ENTER para salir
+                      </span>
+                    )}
+                  </div>
                 </div>
                 
                 {isLoading ? (
@@ -415,17 +560,20 @@ const PosPage = () => {
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-auto h-full">
+                  <div className="flex-1 p-2 h-full datatable-element">
                     <DataTable<ProductSummary>
                       columns={columns}
                       pageCount={totalPages}
                       variant='pos'
                       manualPagination={true}
                       pageFun={setPageableRequest}
+                      pageSizeOptions={pageSizeOptions}
                       data={productsBank}
                       isLoading={isLoading}
+                      level={level === "search" ? "search" : level} // Pasar el nivel actual al DataTable
                       onRowSelect={(row) => openModal(row)}
                       emptyState="No se encontraron productos con los filtros seleccionados."
+                      isAvailableKeyBoard={level !== "search"} // Deshabilitar teclado en modo búsqueda
                     />
                   </div>
                 )}
@@ -449,7 +597,12 @@ const PosPage = () => {
               </div>
             </div>
 
-            <div className="w-[40%] flex flex-col gap-3">
+            {/* Sección derecha - Factura con navegación por click derecho */}
+            <div 
+              className="w-[40%] flex flex-col gap-3"
+              ref={invoiceContainerRef}
+              onContextMenu={handleContextMenu}
+            >
               <div className="grid grid-cols-2 gap-2.5">
                 <button className="flex flex-col items-center gap-2 p-3 bg-white border border-border text-secondary rounded-xl hover:border-primary/40 hover:text-primary transition shadow-sm">
                   <CreditCard className="h-6 w-6" />
@@ -470,7 +623,7 @@ const PosPage = () => {
               </div>
 
               {/* Invoice Items */}
-              <div className="flex-1 bg-white rounded-xl border border-border/60 shadow-sm flex flex-col overflow-hidden">
+              <div className="flex-1 bg-white rounded-xl border border-border/60 shadow-sm flex flex-col overflow-hidden invoice-element">
                 <div className="px-3 py-2 bg-gray-50 border-b border-border/60 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-secondary">Factura</h3>
@@ -500,6 +653,7 @@ const PosPage = () => {
                     <div className="h-full flex flex-col items-center justify-center text-center text-muted p-4">
                       <Receipt className="h-10 w-10 mb-2 opacity-20" />
                       <p className="text-xs">No hay productos</p>
+                      <p className="text-xs mt-2 text-blue-600">Haga click derecho aquí para activar navegación</p>
                     </div>
                   ) : (
                     <div>
@@ -507,7 +661,11 @@ const PosPage = () => {
                         <div
                           key={item.product.id}
                           className={`relative group ${
-                            index === 0 ? 'bg-blue-50/50 border-b-2 border-primary/30' : 'border-b border-border/30'
+                            index === focusedInvoiceIndex 
+                              ? 'bg-blue-100 border-1 border-blue-300' 
+                              : index === 0 
+                                ? 'bg-blue-50/50 border-b-2 border-primary/30' 
+                                : 'border-b border-border/30'
                           }`}
                         >
                           <div className="grid grid-cols-12 gap-2 px-3 py-2.5 text-xs items-center">
@@ -527,6 +685,7 @@ const PosPage = () => {
                                 key={item.product.id}
                                 item={item}
                                 handleUpdateQuantity={handleUpdateQuantity}
+                                isFocused={index === focusedInvoiceIndex}
                               />
                             </div>
                             <div className="col-span-2 text-right">
@@ -557,6 +716,11 @@ const PosPage = () => {
                 <div className="border-t-2 border-border/60">
                   <div className="px-3 py-2 flex items-center justify-between text-xs">
                     <span className="text-muted font-medium">REG: ({invoiceItems.length})</span>
+                    {focusedInvoiceIndex >= 0 && (
+                      <span className="text-blue-600 font-semibold">
+                        Producto seleccionado: {focusedInvoiceIndex + 1}/{invoiceItems.length}
+                      </span>
+                    )}
                   </div>
                   <div className="bg-gradient-to-br from-gray-100 to-gray-200 px-4 py-3 border-y border-border">
                     <div className="text-center">
@@ -583,11 +747,11 @@ const PosPage = () => {
       </div>
       {temporalProduct && ctrlModalProduct && (
         <ProductConfirmModal
-        open={ctrlModalProduct}
-        onClose={closeModal}
-        onConfirm={handleAddProduct}
-        product={temporalProduct}
-        existence={temporalSummary.quantity}
+          open={ctrlModalProduct}
+          onClose={closeModal}
+          onConfirm={handleAddProduct}
+          product={temporalProduct}
+          existence={temporalSummary.quantity}
         />
       )}
     </>

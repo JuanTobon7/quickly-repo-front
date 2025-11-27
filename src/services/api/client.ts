@@ -61,16 +61,16 @@ function decodeHtmlEntities(str: any): any {
 // ---------------------------------------------------------
 // Configuración base
 // ---------------------------------------------------------
-const baseURL = import.meta.env.VITE_API_URL;
+const baseURL = import.meta.env.VITE_API_URL || "https://viddefe.com/api/v1";
 
 if (!baseURL && import.meta.env.MODE === "development") {
   console.warn("⚠️  Missing VITE_API_URL in .env");
 }
 
 const api = axios.create({
-  baseURL: baseURL || "https://viddefe.com/api/v1",
+  baseURL: baseURL,
   // NO configurar Content-Type por defecto - axios lo detectará automáticamente
-  // (application/json para objetos, multipart/form-data para FormData, etc.)
+  // (application/json para objetos, multipart/form-data para FormData, etc.)
 });
 
 // ---------------------------------------------------------

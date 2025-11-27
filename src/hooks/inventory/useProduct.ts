@@ -29,6 +29,8 @@ export function useProducts(params: ProductQueryParams & { keyWord?: string }) {
         : ["products", params],
       queryFn,
       placeholderData: (prev) => prev,
+      staleTime: 10 * 60 * 1000, // 10 minutos frescos
+      gcTime: 30 * 60 * 1000, // cache vive 30 minutos aunque nadie la use
     });
 
   const products= data?.content ?? [];

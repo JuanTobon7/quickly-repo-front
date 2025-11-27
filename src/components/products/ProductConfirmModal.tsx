@@ -11,20 +11,12 @@ interface Props {
   existence: number;
 }
 
-
 function calculatePrices(cost: number, percentage: number): number {
-  // add profit
   const profit = cost * (percentage / 100);
   const price = cost + profit;
-
-  // round to 100
   const roundedPrice = roundPrice(price, 100);
-
   return roundedPrice;
 }
-
-
-
 
 export default function ProductConfirmModal({
   open,
@@ -38,7 +30,8 @@ export default function ProductConfirmModal({
   const [qty, setQty] = useState<number>(1);
   const [images, setImages] = useState<ProductImage[] | null>(null);
   const [mainImg, setMainImg] = useState<ProductImage | null>(null);
-  const [selectedPriceLevel, setSelectedPriceLevel] = useState<number>(2); // Por defecto el nivel 3 (índice 2)
+  const [selectedPriceLevel, setSelectedPriceLevel] = useState<number>(0);
+  const priceButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Fetch imágenes
   useEffect(() => {
@@ -57,17 +50,116 @@ export default function ProductConfirmModal({
     const dialog = dialogRef.current;
     if (!dialog) return;
 
-    open ? dialog.showModal() : dialog.close();
+    if (open) {
+      dialog.showModal();
+      // Enfocar el dialog cuando se abre
+      dialog.focus();
+    } else {
+      dialog.close();
+    }
   }, [open]);
 
-  if (!product) return null;
+  useEffect(() => {
+    if (priceButtonRefs.current[selectedPriceLevel]) {
+      priceButtonRefs.current[selectedPriceLevel]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest'
+      });
+    }
+  }, [selectedPriceLevel]);
 
-  function handleQtyChange(
+  // Manejo de eventos de teclado - CORREGIDO
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKey = (e: KeyboardEvent) => {
+      // Solo procesar si el modal está abierto
+      const dialog = dialogRef.current;
+      if (!dialog || !dialog.open) return;
+
+      // Prevenir el comportamiento por defecto solo para las combinaciones que nos interesan
+        // Ctrl + ArrowUp → precio anterior
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          e.stopPropagation();
+          setSelectedPriceLevel((prev) => Math.max(prev - 1, 0));
+          return;
+        }
+
+        // Ctrl + ArrowDown → precio siguiente
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          e.stopPropagation();
+          setSelectedPriceLevel((prev) =>
+            Math.min(prev + 1, (product.priceLevels?.length ?? 1) - 1)
+          );
+          return;
+        }
+
+        // Ctrl + + o Ctrl + =
+        if (e.key === "+" || e.key === "=") {
+          e.preventDefault();
+          e.stopPropagation();
+          setQty((q) => Math.min(existence, q + 1));
+          return;
+        }
+
+        // Ctrl + -
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          e.stopPropagation();
+          setQty((q) => Math.max(1, q - 1));
+          return;
+        }
+
+        // Ctrl + Enter → confirmar
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.stopPropagation();
+          const selectedPrice = calculatePrices(
+            product.priceAfterTaxes,
+            product.priceLevels?.[selectedPriceLevel]?.profitPercentage || 0
+          );
+          onConfirm(qty, selectedPrice);
+          onClose();
+          return;
+      }
+
+      // Escape → cerrar (sin Ctrl)
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+
+      // Enter en el input de cantidad (sin Ctrl)
+      if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+        const input = e.target as HTMLInputElement;
+        if (input.type === 'number') {
+          e.preventDefault();
+          input.blur(); // Esto activará el onBlur que ya tenemos
+          onClose();
+          return;
+        }
+      }
+    };
+
+    // Agregar el event listener al document en lugar del dialog
+    document.addEventListener("keydown", handleKey, true); // Usar capture phase
+
+    return () => {
+      document.removeEventListener("keydown", handleKey, true);
+    };
+  }, [open, qty, selectedPriceLevel, product, existence, onConfirm, onClose]);
+
+  // Función auxiliar para manejar cambios de cantidad
+  const handleQtyChange = (
     action: "inc" | "dec" | "set",
-    value: number | string,
-    setQty: Dispatch<SetStateAction<number>>,
-    max: number
-  ) {
+    value: number | string = 0,
+    max: number = existence
+  ) => {
     if (action === "inc") {
       setQty((q) => Math.min(max, q + 1));
       return;
@@ -93,14 +185,18 @@ export default function ProductConfirmModal({
       const sanitized = Math.max(1, Math.min(max, num));
       setQty(sanitized);
     }
-  }
+  };
 
+  if (!product) return null;
 
   return (
     <dialog
       ref={dialogRef}
-      onCancel={onClose}
-      className="w-full max-w-6xl rounded-xl border border-gray-300 bg-white shadow-xl p-0 overflow-hidden"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      className="w-full max-w-6xl rounded-xl border border-gray-300 bg-white shadow-xl p-0 overflow-hidden backdrop:bg-black/50"
     >
       {/* HEADER */}
       <div className="flex flex-col md:flex-row gap-4 bg-gray-50 border-b border-gray-200 p-5 w-auto">
@@ -137,10 +233,10 @@ export default function ProductConfirmModal({
             <img
               src={mainImg.filePath}
               alt={product.name}
-              className="w-full max-w-[420px] h-[380px] object-contain rounded-lg border border-gray-200 bg-gray-50 p-4"
+              className="w-full max-w-[600px] h-[500px] object-contain rounded-lg border border-gray-200 bg-gray-50 p-4"
             />
           ) : (
-            <div className="w-full max-w-[420px] h-[380px] bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-400">
+            <div className="w-full max-w-[600px] h-[500px] bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-400">
               No image
             </div>
           )}
@@ -157,6 +253,7 @@ export default function ProductConfirmModal({
           <div className="flex flex-col gap-3 max-h-[280px] overflow-y-auto pr-2">
             {product.priceLevels?.map((pl, idx) => (
               <button
+                ref={el => priceButtonRefs.current[idx] = el}
                 key={idx}
                 type="button"
                 onClick={() => setSelectedPriceLevel(idx)}
@@ -170,11 +267,7 @@ export default function ProductConfirmModal({
                   ({idx + 1})
                 </span>
 
-                <span className="font-medium text-sm flex-1 text-left">
-                  {pl.name}
-                </span>
-
-                <span className="font-semibold">
+                <span className="font-semibold text-xl">
                   ${calculatePrices(product.priceAfterTaxes, pl.profitPercentage).toLocaleString()}
                 </span>
               </button>
@@ -186,8 +279,9 @@ export default function ProductConfirmModal({
             <label className="text-xs font-medium text-gray-600 block mb-2">CANTIDAD</label>
             <div className="flex items-center justify-center gap-2">
               <button
-                onClick={() => handleQtyChange("dec", 0, setQty, existence)}
+                onClick={() => handleQtyChange("dec")}
                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-lg transition"
+                aria-label="Reducir cantidad"
               >
                 -
               </button>
@@ -203,14 +297,21 @@ export default function ProductConfirmModal({
                 "
                 value={qty === 0 ? "" : qty}
                 onChange={(e) =>
-                  handleQtyChange("set", e.target.value, setQty, existence)
+                  handleQtyChange("set", e.target.value)
                 }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  }
+                }}
                 min={1}
                 max={existence}
+                aria-label="Cantidad del producto"
               />
               <button
-                onClick={() => handleQtyChange("inc", 0, setQty, existence)}
+                onClick={() => handleQtyChange("inc")}
                 className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-lg transition"
+                aria-label="Aumentar cantidad"
               >
                 +
               </button>
