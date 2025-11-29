@@ -36,7 +36,7 @@ const PosPage = () => {
     currentQuantity: number;
     currentUnitPrice: number;
   } | null>(null);
-  const debouncedSearchInput = useDebounce(searchTerm, 300);
+  const debouncedSearchInput = useDebounce(searchTerm, 150);
   const [params, setParams] = useState<ProductQueryParams>({
     pageableRequest: pageableRequest,
     keyWord: debouncedSearchInput
