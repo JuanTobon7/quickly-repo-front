@@ -28,6 +28,7 @@ export function useProducts(params: ProductQueryParams & { keyWord?: string }) {
         ? ["products-keyword", params.keyWord, params.pageableRequest]
         : ["products", params],
       queryFn,
+      placeholderData: (prev) => prev
     });
 
   const products= data?.content ?? [];
