@@ -23,10 +23,11 @@ const PosPage = () => {
   const [temporalSummary, setTemporalSummary] = useState<ProductSummary>(null);
   const [ctrlModalProduct, setCtrlModalProduct] = useState<boolean>(false);
   const [selectedClient, setSelectedClient] = useState({
-    name: 'JULIAN GUILLEN CUBILLOS',
-    nit: '93297332',
-    seller: 'YEISON OSORIO'
+    name: 'Jhon Doe',
+    nit: '1111122223333',
+    seller: 'Jhon Seller'
   });
+  
   
   const [focusedInvoiceIndex, setFocusedInvoiceIndex] = useState<number>(0);
   const [numberBuffer, setNumberBuffer] = useState<string>('');
